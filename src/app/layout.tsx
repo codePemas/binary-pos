@@ -9,6 +9,7 @@ import {
   Package,
   Truck,
   Users,
+  Award,
   Menu,
   X,
   Store,
@@ -26,6 +27,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     { name: 'Inventory', href: '/inventory', icon: Package },
     { name: 'Suppliers', href: '/suppliers', icon: Truck },
     { name: 'Staff & Shifts', href: '/staff', icon: Users },
+    { name: 'Customers', href: '/customers', icon: Award },
   ];
 
   return (
