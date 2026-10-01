@@ -3,392 +3,231 @@
 import { useState, useEffect } from 'react';
 import {
   Users,
-  ShieldCheck,
-  UserPlus,
-  Lock,
   Clock,
-  CheckCircle2,
-  AlertCircle,
-  Banknote,
+  Lock,
   DollarSign,
+  AlertTriangle,
+  CheckCircle2,
+  FileSpreadsheet,
+  Search,
+  Shield,
 } from 'lucide-react';
+
+interface ShiftSession {
+  id: string;
+  cashierName: string;
+  startTime: string;
+  endTime?: string;
+  openingFloat: number;
+  cashSales: number;
+  cardSales: number;
+  expectedCash: number;
+  actualCashCounted?: number;
+  variance?: number;
+  status: 'OPEN' | 'CLOSED';
+}
 
 interface StaffMember {
   id: string;
   name: string;
-  role: 'Cashier' | 'Store Manager' | 'Stock Controller';
+  role: 'Store Manager' | 'Cashier' | 'Inventory Clerk';
   pin: string;
-  status: 'Active' | 'On Break' | 'Off Duty';
-}
-
-interface ShiftLog {
-  id: string;
-  staffName: string;
-  startTime: string;
-  endTime?: string;
-  openingFloat: number;
-  closingFloat?: number;
-  expectedTotal?: number;
-  status: 'Open' | 'Closed';
+  status: 'Active' | 'On Leave';
+  shiftsCompleted: number;
 }
 
 const DEFAULT_STAFF: StaffMember[] = [
-  { id: '1', name: 'Sipho Ndlovu', role: 'Store Manager', pin: '1234', status: 'Active' },
-  { id: '2', name: 'Lindiwe Mthembu', role: 'Cashier', pin: '5678', status: 'Active' },
-  { id: '3', name: 'Anathi Mgijima', role: 'Stock Controller', pin: '9012', status: 'Off Duty' },
+  { id: '1', name: 'Sipho Ndlovu', role: 'Store Manager', pin: '1234', status: 'Active', shiftsCompleted: 142 },
+  { id: '2', name: 'Lindiwe Mthembu', role: 'Cashier', pin: '5678', status: 'Active', shiftsCompleted: 88 },
+  { id: '3', name: 'Ayo Balogun', role: 'Inventory Clerk', pin: '9012', status: 'Active', shiftsCompleted: 64 },
 ];
 
 export default function StaffPage() {
-  const [staff, setStaff] = useState<StaffMember[]>([]);
-  const [shifts, setShifts] = useState<ShiftLog[]>([]);
-  const [activeShift, setActiveShift] = useState<ShiftLog | null>(null);
-  
-  // Modals state
-  const [isNewStaffOpen, setIsNewStaffOpen] = useState(false);
-  const [isStartShiftOpen, setIsStartShiftOpen] = useState(false);
-  const [isEndShiftOpen, setIsEndShiftOpen] = useState(false);
-
-  // Form Inputs
-  const [newName, setNewName] = useState('');
-  const [newRole, setNewRole] = useState<'Cashier' | 'Store Manager' | 'Stock Controller'>('Cashier');
-  const [newPin, setNewPin] = useState('');
-  
-  const [openingFloatInput, setOpeningFloatInput] = useState('');
-  const [closingFloatInput, setClosingFloatInput] = useState('');
+  const [staff, setStaff] = useState<StaffMember[]>(DEFAULT_STAFF);
+  const [shifts, setShifts] = useState<ShiftSession[]>([]);
+  const [search, setSearch] = useState('');
+  const [activeTab, setActiveTab] = useState<'SHIFT_LOGS' | 'STAFF_LIST'>('SHIFT_LOGS');
 
   useEffect(() => {
-    const savedStaff = localStorage.getItem('forte_staff');
-    if (savedStaff) {
+    const savedShifts = localStorage.getItem('forte_shifts');
+    if (savedShifts) {
       try {
-        setStaff(JSON.parse(savedStaff));
+        setShifts(JSON.parse(savedShifts));
       } catch (e) {
-        setStaff(DEFAULT_STAFF);
-      }
-    } else {
-      setStaff(DEFAULT_STAFF);
-    }
-
-    const savedShift = localStorage.getItem('forte_active_shift');
-    if (savedShift) {
-      try {
-        setActiveShift(JSON.parse(savedShift));
-      } catch (e) {
-        setActiveShift(null);
+        setShifts([]);
       }
     }
   }, []);
 
-  const handleAddStaff = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newName || !newPin) return;
-
-    const newMember: StaffMember = {
-      id: Date.now().toString(),
-      name: newName,
-      role: newRole,
-      pin: newPin,
-      status: 'Active',
-    };
-
-    const updated = [...staff, newMember];
-    setStaff(updated);
-    localStorage.setItem('forte_staff', JSON.stringify(updated));
-
-    setNewName('');
-    setNewPin('');
-    setIsNewStaffOpen(false);
-  };
-
-  const handleStartShift = (e: React.FormEvent) => {
-    e.preventDefault();
-    const floatVal = parseFloat(openingFloatInput) || 0;
-
-    const newShift: ShiftLog = {
-      id: `SH-${Math.floor(1000 + Math.random() * 9000)}`,
-      staffName: staff[1]?.name || 'Lindiwe Mthembu',
-      startTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      openingFloat: floatVal,
-      status: 'Open',
-    };
-
-    setActiveShift(newShift);
-    localStorage.setItem('forte_active_shift', JSON.stringify(newShift));
-    setIsStartShiftOpen(false);
-    setOpeningFloatInput('');
-  };
-
-  const handleEndShift = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!activeShift) return;
-
-    const closingVal = parseFloat(closingFloatInput) || 0;
-    const closedShift: ShiftLog = {
-      ...activeShift,
-      endTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      closingFloat: closingVal,
-      status: 'Closed',
-    };
-
-    setShifts((prev) => [closedShift, ...prev]);
-    setActiveShift(null);
-    localStorage.removeItem('forte_active_shift');
-    setIsEndShiftOpen(false);
-    setClosingFloatInput('');
-  };
+  const totalVariance = shifts.reduce((acc, s) => acc + (s.variance || 0), 0);
+  const closedShifts = shifts.filter((s) => s.status === 'CLOSED');
 
   return (
     <div className="flex-1 p-4 md:p-6 space-y-6">
       {/* Header Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-950 p-5 rounded-3xl border border-slate-800">
-        <div className="flex items-center gap-3">
-          <div className="p-3 bg-blue-600/20 border border-blue-500/30 rounded-2xl text-blue-400">
-            <Users className="w-6 h-6" />
-          </div>
-          <div>
-            <h1 className="text-base font-extrabold text-white">Staff & Shift Management</h1>
-            <p className="text-xs text-slate-400">Control access levels and manage till drawer floats</p>
-          </div>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-950 p-6 rounded-3xl border border-slate-800">
+        <div>
+          <h2 className="text-lg font-bold text-white flex items-center gap-2">
+            <Users className="w-5 h-5 text-blue-400" /> Staff & Shift Reconciliation Audit
+          </h2>
+          <p className="text-xs text-slate-400 mt-1">
+            Review cashier drawer closeouts, cash variances, and system access rights.
+          </p>
         </div>
 
-        <button
-          onClick={() => setIsNewStaffOpen(true)}
-          className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-blue-950/50 transition"
-        >
-          <UserPlus className="w-4 h-4" /> Add Employee
-        </button>
-      </div>
-
-      {/* Active Till Shift Status */}
-      <div className="bg-slate-950 border border-slate-800 rounded-3xl p-5 space-y-4">
-        <div className="flex items-center justify-between border-b border-slate-900 pb-3">
-          <div className="flex items-center gap-2">
-            <Clock className="w-4 h-4 text-emerald-400" />
-            <h3 className="text-sm font-bold text-white">Current Active Shift</h3>
-          </div>
-          <span
-            className={`text-[10px] font-mono px-2.5 py-1 rounded-full border font-bold ${
-              activeShift
-                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setActiveTab('SHIFT_LOGS')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition ${
+              activeTab === 'SHIFT_LOGS'
+                ? 'bg-blue-600 text-white'
+                : 'bg-slate-900 text-slate-400 hover:text-white'
             }`}
           >
-            {activeShift ? 'REGISTER OPEN' : 'NO ACTIVE SHIFT'}
-          </span>
-        </div>
-
-        {activeShift ? (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-900/50 p-4 rounded-2xl border border-slate-800">
-            <div>
-              <p className="text-[10px] text-slate-400 uppercase font-mono">Cashier</p>
-              <p className="text-xs font-bold text-white mt-0.5">{activeShift.staffName}</p>
-            </div>
-            <div>
-              <p className="text-[10px] text-slate-400 uppercase font-mono">Opening Float</p>
-              <p className="text-xs font-bold text-emerald-400 font-mono mt-0.5">
-                R {activeShift.openingFloat.toFixed(2)}
-              </p>
-            </div>
-            <div className="flex items-center justify-end">
-              <button
-                onClick={() => setIsEndShiftOpen(true)}
-                className="bg-red-600/20 hover:bg-red-600 border border-red-500/40 text-red-400 hover:text-white px-4 py-2 rounded-xl text-xs font-bold transition"
-              >
-                End Shift & Close Drawer
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-slate-900/30 p-4 rounded-2xl border border-dashed border-slate-800">
-            <div className="flex items-center gap-3">
-              <AlertCircle className="w-5 h-5 text-amber-400" />
-              <p className="text-xs text-slate-400">
-                No shift is currently registered. Open a shift with an initial cash float before processing sales.
-              </p>
-            </div>
-            <button
-              onClick={() => setIsStartShiftOpen(true)}
-              className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap"
-            >
-              Start Shift & Open Till
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* Staff Roster Table */}
-      <div className="bg-slate-950 border border-slate-800 rounded-3xl p-5 space-y-4">
-        <h3 className="text-sm font-bold text-white">Employee Roster & Access Roles</h3>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs text-slate-400">
-            <thead className="bg-slate-900/80 text-slate-300 font-mono uppercase text-[10px] border-b border-slate-800">
-              <tr>
-                <th className="p-3">Employee Name</th>
-                <th className="p-3">Role</th>
-                <th className="p-3">Security PIN</th>
-                <th className="p-3">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-900">
-              {staff.map((member) => (
-                <tr key={member.id} className="hover:bg-slate-900/30 transition">
-                  <td className="p-3 font-bold text-white">{member.name}</td>
-                  <td className="p-3">
-                    <span className="flex items-center gap-1.5">
-                      <ShieldCheck className="w-3.5 h-3.5 text-blue-400" /> {member.role}
-                    </span>
-                  </td>
-                  <td className="p-3 font-mono text-slate-500">••••</td>
-                  <td className="p-3">
-                    <span
-                      className={`px-2 py-0.5 rounded-md text-[10px] font-mono ${
-                        member.status === 'Active'
-                          ? 'bg-emerald-500/20 text-emerald-400'
-                          : member.status === 'On Break'
-                          ? 'bg-amber-500/20 text-amber-400'
-                          : 'bg-slate-800 text-slate-500'
-                      }`}
-                    >
-                      {member.status}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+            Shift Audit Logs ({closedShifts.length})
+          </button>
+          <button
+            onClick={() => setActiveTab('STAFF_LIST')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition ${
+              activeTab === 'STAFF_LIST'
+                ? 'bg-blue-600 text-white'
+                : 'bg-slate-900 text-slate-400 hover:text-white'
+            }`}
+          >
+            Staff Roster ({staff.length})
+          </button>
         </div>
       </div>
 
-      {/* Modal: Add Employee */}
-      {isNewStaffOpen && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-950 border border-slate-800 p-6 rounded-3xl w-full max-w-md space-y-4">
-            <h3 className="text-sm font-bold text-white">Add New Employee</h3>
-            <form onSubmit={handleAddStaff} className="space-y-3 text-xs">
-              <div>
-                <label className="text-slate-400">Full Name</label>
-                <input
-                  type="text"
-                  required
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  className="w-full mt-1 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-blue-500"
-                />
-              </div>
-              <div>
-                <label className="text-slate-400">Role</label>
-                <select
-                  value={newRole}
-                  onChange={(e) => setNewRole(e.target.value as any)}
-                  className="w-full mt-1 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-blue-500"
-                >
-                  <option value="Cashier">Cashier</option>
-                  <option value="Store Manager">Store Manager</option>
-                  <option value="Stock Controller">Stock Controller</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-slate-400">4-Digit Security PIN</label>
-                <input
-                  type="password"
-                  maxLength={4}
-                  required
-                  value={newPin}
-                  onChange={(e) => setNewPin(e.target.value)}
-                  className="w-full mt-1 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-blue-500"
-                />
-              </div>
-              <div className="flex gap-2 pt-2">
-                <button
-                  type="submit"
-                  className="flex-1 bg-blue-600 hover:bg-blue-500 text-white py-2 rounded-xl font-bold"
-                >
-                  Save Employee
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsNewStaffOpen(false)}
-                  className="px-4 bg-slate-900 text-slate-400 rounded-xl font-bold hover:text-white"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          </div>
+      {/* Metrics Row */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="bg-slate-950 p-5 rounded-3xl border border-slate-800 space-y-1">
+          <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Total Reconciled Shifts</p>
+          <p className="text-2xl font-bold font-mono text-white">{closedShifts.length}</p>
         </div>
-      )}
+        <div className="bg-slate-950 p-5 rounded-3xl border border-slate-800 space-y-1">
+          <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Till Cash Variance</p>
+          <p
+            className={`text-2xl font-bold font-mono ${
+              totalVariance === 0
+                ? 'text-emerald-400'
+                : totalVariance < 0
+                ? 'text-red-400'
+                : 'text-blue-400'
+            }`}
+          >
+            R {totalVariance.toFixed(2)}
+          </p>
+        </div>
+        <div className="bg-slate-950 p-5 rounded-3xl border border-slate-800 space-y-1">
+          <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Active Staff On Duty</p>
+          <p className="text-2xl font-bold font-mono text-blue-400">
+            {staff.filter((s) => s.status === 'Active').length}
+          </p>
+        </div>
+      </div>
 
-      {/* Modal: Start Shift */}
-      {isStartShiftOpen && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-950 border border-slate-800 p-6 rounded-3xl w-full max-w-md space-y-4">
+      {/* Main Tab Content */}
+      {activeTab === 'SHIFT_LOGS' ? (
+        <div className="bg-slate-950 border border-slate-800 rounded-3xl p-5 space-y-4">
+          <div className="flex items-center justify-between">
             <h3 className="text-sm font-bold text-white flex items-center gap-2">
-              <Banknote className="w-4 h-4 text-emerald-400" /> Start Shift & Register Float
+              <Clock className="w-4 h-4 text-amber-400" /> Shift Drawer Closeouts & Z-Reports
             </h3>
-            <form onSubmit={handleStartShift} className="space-y-3 text-xs">
-              <div>
-                <label className="text-slate-400">Opening Till Float Amount (ZAR)</label>
-                <input
-                  type="number"
-                  required
-                  placeholder="e.g. 500"
-                  value={openingFloatInput}
-                  onChange={(e) => setOpeningFloatInput(e.target.value)}
-                  className="w-full mt-1 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-emerald-500"
-                />
-              </div>
-              <div className="flex gap-2 pt-2">
-                <button
-                  type="submit"
-                  className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white py-2 rounded-xl font-bold"
-                >
-                  Open Register
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsStartShiftOpen(false)}
-                  className="px-4 bg-slate-900 text-slate-400 rounded-xl font-bold hover:text-white"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
+            <span className="text-xs font-mono text-slate-400">Stored in localStorage</span>
           </div>
-        </div>
-      )}
 
-      {/* Modal: End Shift */}
-      {isEndShiftOpen && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-950 border border-slate-800 p-6 rounded-3xl w-full max-w-md space-y-4">
-            <h3 className="text-sm font-bold text-white">End Shift & Close Drawer</h3>
-            <form onSubmit={handleEndShift} className="space-y-3 text-xs">
-              <div>
-                <label className="text-slate-400">Counted Closing Cash Amount (ZAR)</label>
-                <input
-                  type="number"
-                  required
-                  placeholder="e.g. 1850"
-                  value={closingFloatInput}
-                  onChange={(e) => setClosingFloatInput(e.target.value)}
-                  className="w-full mt-1 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-red-500"
-                />
+          {shifts.length === 0 ? (
+            <div className="text-center py-12 text-slate-500 text-xs">
+              No shift reports submitted yet. End a cashier shift on <span className="font-mono text-white">/cashier</span> to generate Z-Reports here.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-slate-800 text-[11px] font-mono uppercase text-slate-400">
+                    <th className="py-3 px-4">Shift ID</th>
+                    <th className="py-3 px-4">Cashier</th>
+                    <th className="py-3 px-4">Times</th>
+                    <th className="py-3 px-4 text-right">Expected Cash</th>
+                    <th className="py-3 px-4 text-right">Counted Cash</th>
+                    <th className="py-3 px-4 text-right">Variance</th>
+                    <th className="py-3 px-4 text-center">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-900 text-xs font-mono">
+                  {shifts.map((s) => (
+                    <tr key={s.id} className="hover:bg-slate-900/50 transition">
+                      <td className="py-3 px-4 font-bold text-white">{s.id}</td>
+                      <td className="py-3 px-4 font-sans text-slate-200">{s.cashierName}</td>
+                      <td className="py-3 px-4 text-slate-400 text-[11px]">
+                        {s.startTime} {s.endTime ? `- ${s.endTime}` : '(Ongoing)'}
+                      </td>
+                      <td className="py-3 px-4 text-right text-slate-300">
+                        R {s.expectedCash.toFixed(2)}
+                      </td>
+                      <td className="py-3 px-4 text-right text-slate-300">
+                        {s.actualCashCounted !== undefined ? `R ${s.actualCashCounted.toFixed(2)}` : '-'}
+                      </td>
+                      <td
+                        className={`py-3 px-4 text-right font-bold ${
+                          (s.variance || 0) === 0
+                            ? 'text-emerald-400'
+                            : (s.variance || 0) < 0
+                            ? 'text-red-400'
+                            : 'text-blue-400'
+                        }`}
+                      >
+                        {s.variance !== undefined ? `R ${s.variance.toFixed(2)}` : '-'}
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        <span
+                          className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${
+                            s.status === 'CLOSED'
+                              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                              : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                          }`}
+                        >
+                          {s.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="bg-slate-950 border border-slate-800 rounded-3xl p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold text-white flex items-center gap-2">
+              <Shield className="w-4 h-4 text-blue-400" /> Staff Profiles & PIN Credentials
+            </h3>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {staff.map((member) => (
+              <div key={member.id} className="bg-slate-900/60 p-4 rounded-2xl border border-slate-800 space-y-2">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h4 className="font-bold text-white text-xs">{member.name}</h4>
+                    <p className="text-[10px] text-blue-400 font-mono mt-0.5">{member.role}</p>
+                  </div>
+                  <span className="text-[10px] bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-md border border-emerald-500/20">
+                    {member.status}
+                  </span>
+                </div>
+                <div className="pt-2 border-t border-slate-800 text-[11px] font-mono text-slate-400 flex justify-between">
+                  <span>Access PIN:</span>
+                  <span className="text-white font-bold">****</span>
+                </div>
+                <div className="text-[11px] font-mono text-slate-400 flex justify-between">
+                  <span>Shifts Logged:</span>
+                  <span className="text-white font-bold">{member.shiftsCompleted}</span>
+                </div>
               </div>
-              <div className="flex gap-2 pt-2">
-                <button
-                  type="submit"
-                  className="flex-1 bg-red-600 hover:bg-red-500 text-white py-2 rounded-xl font-bold"
-                >
-                  Reconcile & Close Register
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsEndShiftOpen(false)}
-                  className="px-4 bg-slate-900 text-slate-400 rounded-xl font-bold hover:text-white"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
+            ))}
           </div>
         </div>
       )}
