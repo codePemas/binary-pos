@@ -1,399 +1,218 @@
 'use client';
 
 import { useState } from 'react';
+import {
+  Package,
+  AlertTriangle,
+  FilePlus,
+  Search,
+  ArrowUpRight,
+  Plus,
+  CheckCircle2,
+  X,
+} from 'lucide-react';
+import Link from 'next/link';
 
 interface InventoryItem {
   id: string;
-  barcode: string;
+  sku: string;
   name: string;
   category: string;
+  price: number;
   costPrice: number;
-  sellingPrice: number;
   stock: number;
-  minStock: number;
-}
-
-interface WasteLog {
-  id: string;
-  productName: string;
-  quantity: number;
-  reason: 'EXPIRED' | 'DAMAGED' | 'STOLEN';
-  date: string;
+  minThreshold: number;
+  supplier: string;
 }
 
 const INITIAL_INVENTORY: InventoryItem[] = [
-  { id: '1', barcode: '6001234567890', name: 'Forte Whole Milk 2L', category: 'Dairy', costPrice: 24.00, sellingPrice: 32.99, stock: 45, minStock: 15 },
-  { id: '2', barcode: '6001234567891', name: 'White Bread 700g', category: 'Bakery', costPrice: 11.50, sellingPrice: 16.50, stock: 8, minStock: 10 },
-  { id: '3', barcode: '6001234567892', name: 'Cheddar Cheese 500g', category: 'Dairy', costPrice: 48.00, sellingPrice: 64.90, stock: 18, minStock: 5 },
-  { id: '4', barcode: '6001234567893', name: 'Sunflower Oil 2L', category: 'Pantry', costPrice: 52.00, sellingPrice: 69.99, stock: 30, minStock: 10 },
-  { id: '5', barcode: '6001234567894', name: 'Maize Meal 5kg', category: 'Pantry', costPrice: 42.00, sellingPrice: 59.99, stock: 4, minStock: 8 },
+  { id: '1', sku: '2001', name: 'Fresh Milk 2L', category: 'Dairy', price: 34.99, costPrice: 26.50, stock: 45, minThreshold: 20, supplier: 'Clover SA' },
+  { id: '2', sku: '2002', name: 'White Bread 700g', category: 'Bakery', price: 18.50, costPrice: 12.00, stock: 60, minThreshold: 25, supplier: 'Sasko Bakery' },
+  { id: '3', sku: '2003', name: 'Cheddar Cheese 500g', category: 'Dairy', price: 62.00, costPrice: 48.00, stock: 8, minThreshold: 15, supplier: 'Parmalat' },
+  { id: '4', sku: '2004', name: 'Instant Coffee 200g', category: 'Pantry', price: 89.99, costPrice: 65.00, stock: 5, minThreshold: 10, supplier: 'Nestlé Foods' },
+  { id: '5', sku: '2005', name: 'White Rice 2kg', category: 'Pantry', price: 42.50, costPrice: 30.00, stock: 35, minThreshold: 20, supplier: 'Tastic Foods' },
+  { id: '6', sku: '2006', name: 'Sunflower Oil 2L', category: 'Pantry', price: 69.99, costPrice: 52.00, stock: 4, minThreshold: 15, supplier: 'Excella Oil' },
+  { id: '7', sku: '2007', name: 'Eggs 30-Pack', category: 'Dairy', price: 74.99, costPrice: 55.00, stock: 6, minThreshold: 12, supplier: 'Golden Lay' },
+  { id: '8', sku: '2008', name: 'Bananas 1kg', category: 'Produce', price: 21.99, costPrice: 14.00, stock: 40, minThreshold: 15, supplier: 'Subtropico' },
 ];
 
 export default function InventoryPage() {
-  const [items, setItems] = useState<InventoryItem[]>(INITIAL_INVENTORY);
-  const [search, setSearch] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('ALL');
-  const [wasteLogs, setWasteLogs] = useState<WasteLog[]>([]);
+  const [inventory, setInventory] = useState<InventoryItem[]>(INITIAL_INVENTORY);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
+  const [activeNotification, setActiveNotification] = useState<string | null>(null);
 
-  // Modal States
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [isWasteModalOpen, setIsWasteModalOpen] = useState(false);
-  const [selectedItemForWaste, setSelectedItemForWaste] = useState<InventoryItem | null>(null);
+  const categories = ['ALL', 'Dairy', 'Bakery', 'Pantry', 'Produce'];
 
-  // New Item Form State
-  const [newItem, setNewItem] = useState({
-    barcode: '',
-    name: '',
-    category: 'Dairy',
-    costPrice: '',
-    sellingPrice: '',
-    stock: '',
-    minStock: '',
-  });
+  const lowStockItems = inventory.filter((item) => item.stock <= item.minThreshold);
 
-  // Waste Log Form State
-  const [wasteQty, setWasteQty] = useState('1');
-  const [wasteReason, setWasteReason] = useState<'EXPIRED' | 'DAMAGED' | 'STOLEN'>('EXPIRED');
-
-  // Add Product Handler
-  const handleAddProduct = (e: React.FormEvent) => {
-    e.preventDefault();
-    const product: InventoryItem = {
-      id: Date.now().toString(),
-      barcode: newItem.barcode,
-      name: newItem.name,
-      category: newItem.category,
-      costPrice: parseFloat(newItem.costPrice) || 0,
-      sellingPrice: parseFloat(newItem.sellingPrice) || 0,
-      stock: parseInt(newItem.stock) || 0,
-      minStock: parseInt(newItem.minStock) || 5,
-    };
-
-    setItems((prev) => [...prev, product]);
-    setIsAddModalOpen(false);
-    setNewItem({ barcode: '', name: '', category: 'Dairy', costPrice: '', sellingPrice: '', stock: '', minStock: '' });
-  };
-
-  // Stock Adjustment
-  const adjustStock = (id: string, delta: number) => {
-    setItems((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, stock: Math.max(0, item.stock + delta) } : item))
+  const handleGeneratePO = (item: InventoryItem) => {
+    setActiveNotification(
+      `Draft Purchase Order for ${item.supplier} (${item.name}) generated! View on the Suppliers page.`
     );
+    setTimeout(() => setActiveNotification(null), 5000);
   };
 
-  // Waste Log Handler
-  const handleLogWaste = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedItemForWaste) return;
-
-    const qty = parseInt(wasteQty) || 1;
-    if (qty > selectedItemForWaste.stock) {
-      alert('Waste quantity exceeds current stock level.');
-      return;
-    }
-
-    // Deduct Stock
-    adjustStock(selectedItemForWaste.id, -qty);
-
-    // Record Log
-    setWasteLogs((prev) => [
-      {
-        id: `WST-${Date.now().toString().slice(-4)}`,
-        productName: selectedItemForWaste.name,
-        quantity: qty,
-        reason: wasteReason,
-        date: new Date().toLocaleDateString(),
-      },
-      ...prev,
-    ]);
-
-    setIsWasteModalOpen(false);
-    setSelectedItemForWaste(null);
-    setWasteQty('1');
-  };
-
-  const filteredItems = items.filter((item) => {
-    const matchesSearch = item.name.toLowerCase().includes(search.toLowerCase()) || item.barcode.includes(search);
+  const filteredItems = inventory.filter((item) => {
+    const matchesSearch =
+      item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      item.sku.includes(searchQuery) ||
+      item.supplier.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory = selectedCategory === 'ALL' || item.category === selectedCategory;
     return matchesSearch && matchesCategory;
   });
 
-  const lowStockCount = items.filter((item) => item.stock <= item.minStock).length;
-
   return (
-    <div className="p-8 space-y-6 max-w-7xl mx-auto w-full">
-      {/* Top Banner Stats */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-black text-white tracking-tight">Inventory & Stock Control</h1>
-          <p className="text-sm text-slate-400 mt-1">Manage stock counts, pricing, and record damaged/expired goods.</p>
+    <div className="flex-1 p-6 space-y-6">
+      {/* Toast Alert Notification */}
+      {activeNotification && (
+        <div className="fixed top-6 right-6 bg-emerald-950 border border-emerald-500 text-emerald-200 px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-3 z-50 animate-bounce">
+          <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+          <span className="text-xs font-semibold">{activeNotification}</span>
+          <button onClick={() => setActiveNotification(null)} className="text-emerald-400 hover:text-white">
+            <X className="w-4 h-4" />
+          </button>
         </div>
-        <button
-          onClick={() => setIsAddModalOpen(true)}
-          className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2.5 rounded-xl font-bold text-sm transition shadow-lg shadow-blue-600/20"
-        >
-          + Add New Product
-        </button>
-      </div>
+      )}
 
-      <div className="grid grid-cols-3 gap-6">
-        <div className="bg-slate-800 p-5 rounded-2xl border border-slate-700">
-          <p className="text-xs text-slate-400 font-semibold uppercase">Total SKUs</p>
-          <p className="text-3xl font-black text-white mt-1">{items.length}</p>
-        </div>
-        <div className="bg-slate-800 p-5 rounded-2xl border border-slate-700">
-          <p className="text-xs text-slate-400 font-semibold uppercase">Low Stock Warnings</p>
-          <p className={`text-3xl font-black mt-1 ${lowStockCount > 0 ? 'text-amber-400' : 'text-emerald-400'}`}>
-            {lowStockCount} Items
-          </p>
-        </div>
-        <div className="bg-slate-800 p-5 rounded-2xl border border-slate-700">
-          <p className="text-xs text-slate-400 font-semibold uppercase">Total Stock Valuation</p>
-          <p className="text-3xl font-black text-emerald-400 mt-1">
-            R{items.reduce((acc, i) => acc + i.sellingPrice * i.stock, 0).toFixed(2)}
-          </p>
-        </div>
-      </div>
-
-      {/* Filter Bar */}
-      <div className="flex gap-4 items-center bg-slate-850 p-4 rounded-2xl border border-slate-800">
-        <input
-          type="text"
-          placeholder="Search by product name or barcode..."
-          className="flex-1 bg-slate-900 text-white placeholder-slate-500 px-4 py-2.5 rounded-xl border border-slate-700 text-sm focus:outline-none focus:border-blue-500"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-        <select
-          className="bg-slate-900 text-slate-300 border border-slate-700 px-4 py-2.5 rounded-xl text-sm font-medium focus:outline-none"
-          value={selectedCategory}
-          onChange={(e) => setSelectedCategory(e.target.value)}
-        >
-          <option value="ALL">All Categories</option>
-          <option value="Dairy">Dairy</option>
-          <option value="Bakery">Bakery</option>
-          <option value="Pantry">Pantry</option>
-        </select>
-      </div>
-
-      {/* Inventory Table */}
-      <div className="bg-slate-800 rounded-2xl border border-slate-700 overflow-hidden">
-        <table className="w-full text-left text-sm text-slate-300">
-          <thead className="bg-slate-900 text-xs text-slate-400 uppercase font-semibold border-b border-slate-700">
-            <tr>
-              <th className="p-4">Barcode / Product</th>
-              <th className="p-4">Category</th>
-              <th className="p-4">Cost Price</th>
-              <th className="p-4">Selling Price</th>
-              <th className="p-4">Current Stock</th>
-              <th className="p-4 text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-700/50">
-            {filteredItems.map((item) => (
-              <tr key={item.id} className="hover:bg-slate-750/50">
-                <td className="p-4">
-                  <p className="font-semibold text-white">{item.name}</p>
-                  <p className="text-xs text-slate-500">BC: {item.barcode}</p>
-                </td>
-                <td className="p-4">
-                  <span className="bg-slate-700 text-slate-300 px-2.5 py-1 rounded-md text-xs font-medium">
-                    {item.category}
-                  </span>
-                </td>
-                <td className="p-4 font-mono text-slate-400">R{item.costPrice.toFixed(2)}</td>
-                <td className="p-4 font-mono text-emerald-400 font-semibold">R{item.sellingPrice.toFixed(2)}</td>
-                <td className="p-4">
-                  <div className="flex items-center space-x-2">
-                    <span
-                      className={`font-bold px-2 py-0.5 rounded text-xs ${
-                        item.stock <= item.minStock
-                          ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                          : 'bg-slate-700 text-slate-200'
-                      }`}
-                    >
-                      {item.stock} units
-                    </span>
-                    {item.stock <= item.minStock && (
-                      <span className="text-[10px] text-amber-400 font-semibold">Low Stock</span>
-                    )}
-                  </div>
-                </td>
-                <td className="p-4 text-right space-x-2">
-                  <button
-                    onClick={() => adjustStock(item.id, 5)}
-                    className="bg-slate-700 hover:bg-slate-600 text-xs px-3 py-1.5 rounded-lg text-slate-200 font-semibold"
-                  >
-                    +5 Stock
-                  </button>
-                  <button
-                    onClick={() => {
-                      setSelectedItemForWaste(item);
-                      setIsWasteModalOpen(true);
-                    }}
-                    className="bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 text-xs px-3 py-1.5 rounded-lg font-semibold"
-                  >
-                    Log Waste
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Waste Audit Section */}
-      {wasteLogs.length > 0 && (
-        <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 space-y-4">
-          <h3 className="text-lg font-bold text-white">Recent Waste & Loss Logs</h3>
-          <div className="space-y-2">
-            {wasteLogs.map((log) => (
-              <div key={log.id} className="bg-slate-900 p-3 rounded-xl border border-slate-700 flex justify-between items-center text-xs">
-                <div>
-                  <span className="font-bold text-slate-200">{log.productName}</span>
-                  <span className="text-slate-500 ml-2">({log.date})</span>
-                </div>
-                <div className="flex items-center space-x-4">
-                  <span className="bg-red-500/20 text-red-400 px-2 py-0.5 rounded font-bold">{log.reason}</span>
-                  <span className="text-slate-300 font-semibold">Qty: {log.quantity}</span>
-                </div>
-              </div>
-            ))}
+      {/* Top Banner & Low Stock Trigger Alert */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-slate-950 border border-slate-800 p-5 rounded-3xl flex items-center justify-between">
+          <div>
+            <p className="text-xs text-slate-400 font-semibold uppercase">Total SKUs</p>
+            <p className="text-2xl font-bold text-white mt-1">{inventory.length}</p>
+          </div>
+          <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-2xl text-blue-400">
+            <Package className="w-6 h-6" />
           </div>
         </div>
-      )}
 
-      {/* Add Product Modal */}
-      {isAddModalOpen && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
-          <form onSubmit={handleAddProduct} className="bg-slate-800 border border-slate-700 p-6 rounded-2xl w-full max-w-lg space-y-4">
-            <h3 className="text-xl font-bold text-white">Add New Product</h3>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-xs text-slate-400 font-semibold block mb-1">Barcode</label>
-                <input
-                  type="text"
-                  required
-                  className="w-full bg-slate-900 border border-slate-700 p-2.5 rounded-xl text-sm text-white focus:outline-none"
-                  value={newItem.barcode}
-                  onChange={(e) => setNewItem({ ...newItem, barcode: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="text-xs text-slate-400 font-semibold block mb-1">Product Name</label>
-                <input
-                  type="text"
-                  required
-                  className="w-full bg-slate-900 border border-slate-700 p-2.5 rounded-xl text-sm text-white focus:outline-none"
-                  value={newItem.name}
-                  onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="text-xs text-slate-400 font-semibold block mb-1">Category</label>
-                <select
-                  className="w-full bg-slate-900 border border-slate-700 p-2.5 rounded-xl text-sm text-white focus:outline-none"
-                  value={newItem.category}
-                  onChange={(e) => setNewItem({ ...newItem, category: e.target.value })}
-                >
-                  <option value="Dairy">Dairy</option>
-                  <option value="Bakery">Bakery</option>
-                  <option value="Pantry">Pantry</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-xs text-slate-400 font-semibold block mb-1">Cost Price (ZAR)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  required
-                  className="w-full bg-slate-900 border border-slate-700 p-2.5 rounded-xl text-sm text-white focus:outline-none"
-                  value={newItem.costPrice}
-                  onChange={(e) => setNewItem({ ...newItem, costPrice: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="text-xs text-slate-400 font-semibold block mb-1">Selling Price (ZAR)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  required
-                  className="w-full bg-slate-900 border border-slate-700 p-2.5 rounded-xl text-sm text-white focus:outline-none"
-                  value={newItem.sellingPrice}
-                  onChange={(e) => setNewItem({ ...newItem, sellingPrice: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="text-xs text-slate-400 font-semibold block mb-1">Initial Stock</label>
-                <input
-                  type="number"
-                  required
-                  className="w-full bg-slate-900 border border-slate-700 p-2.5 rounded-xl text-sm text-white focus:outline-none"
-                  value={newItem.stock}
-                  onChange={(e) => setNewItem({ ...newItem, stock: e.target.value })}
-                />
-              </div>
-            </div>
-            <div className="flex gap-3 pt-4 border-t border-slate-700">
-              <button
-                type="button"
-                onClick={() => setIsAddModalOpen(false)}
-                className="flex-1 py-2.5 bg-slate-700 text-slate-300 rounded-xl font-semibold text-sm"
-              >
-                Cancel
-              </button>
-              <button type="submit" className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl font-bold text-sm">
-                Save Product
-              </button>
-            </div>
-          </form>
+        <div className="bg-slate-950 border border-slate-800 p-5 rounded-3xl flex items-center justify-between">
+          <div>
+            <p className="text-xs text-slate-400 font-semibold uppercase">Low Stock Warnings</p>
+            <p className="text-2xl font-bold text-amber-400 mt-1">{lowStockItems.length} Items</p>
+          </div>
+          <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-2xl text-amber-400">
+            <AlertTriangle className="w-6 h-6" />
+          </div>
         </div>
-      )}
 
-      {/* Log Waste Modal */}
-      {isWasteModalOpen && selectedItemForWaste && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
-          <form onSubmit={handleLogWaste} className="bg-slate-800 border border-slate-700 p-6 rounded-2xl w-full max-w-md space-y-4">
-            <h3 className="text-xl font-bold text-white">Log Waste: {selectedItemForWaste.name}</h3>
-            <div>
-              <label className="text-xs text-slate-400 font-semibold block mb-1">Quantity to Remove</label>
-              <input
-                type="number"
-                min="1"
-                max={selectedItemForWaste.stock}
-                required
-                className="w-full bg-slate-900 border border-slate-700 p-3 rounded-xl text-lg text-white font-bold focus:outline-none"
-                value={wasteQty}
-                onChange={(e) => setWasteQty(e.target.value)}
-              />
-            </div>
-            <div>
-              <label className="text-xs text-slate-400 font-semibold block mb-1">Reason</label>
-              <select
-                className="w-full bg-slate-900 border border-slate-700 p-3 rounded-xl text-sm text-white focus:outline-none font-semibold"
-                value={wasteReason}
-                onChange={(e) => setWasteReason(e.target.value as any)}
-              >
-                <option value="EXPIRED">Expired</option>
-                <option value="DAMAGED">Damaged</option>
-                <option value="STOLEN">Stolen / Discrepancy</option>
-              </select>
-            </div>
-            <div className="flex gap-3 pt-4 border-t border-slate-700">
-              <button
-                type="button"
-                onClick={() => setIsWasteModalOpen(false)}
-                className="flex-1 py-2.5 bg-slate-700 text-slate-300 rounded-xl font-semibold text-sm"
-              >
-                Cancel
-              </button>
-              <button type="submit" className="flex-1 py-2.5 bg-red-600 text-white rounded-xl font-bold text-sm">
-                Confirm & Record Loss
-              </button>
-            </div>
-          </form>
+        <div className="bg-slate-950 border border-slate-800 p-5 rounded-3xl flex items-center justify-between">
+          <div>
+            <p className="text-xs text-slate-400 font-semibold uppercase">Quick Action</p>
+            <Link
+              href="/suppliers"
+              className="inline-flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 font-semibold mt-2"
+            >
+              Manage Supplier POs <ArrowUpRight className="w-4 h-4" />
+            </Link>
+          </div>
+          <div className="p-3 bg-purple-500/10 border border-purple-500/20 rounded-2xl text-purple-400">
+            <FilePlus className="w-6 h-6" />
+          </div>
         </div>
-      )}
+      </div>
+
+      {/* Control Bar: Search & Category Filter */}
+      <div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-slate-950 p-4 rounded-3xl border border-slate-800">
+        <div className="flex items-center gap-3 bg-slate-900 px-3 py-2 rounded-2xl border border-slate-800 w-full md:w-80">
+          <Search className="w-4 h-4 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Search SKU, item, supplier..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full bg-transparent text-xs text-white focus:outline-none placeholder-slate-500"
+          />
+        </div>
+
+        <div className="flex items-center gap-2 overflow-x-auto w-full md:w-auto">
+          {categories.map((cat) => (
+            <button
+              key={cat}
+              onClick={() => setSelectedCategory(cat)}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition ${
+                selectedCategory === cat
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-slate-900 text-slate-400 border border-slate-800 hover:bg-slate-800'
+              }`}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Inventory Items Table */}
+      <div className="bg-slate-950 border border-slate-800 rounded-3xl overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs text-slate-300">
+            <thead className="bg-slate-900/80 text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-800">
+              <tr>
+                <th className="p-4">SKU</th>
+                <th className="p-4">Item Name</th>
+                <th className="p-4">Category</th>
+                <th className="p-4">Cost Price</th>
+                <th className="p-4">Retail Price</th>
+                <th className="p-4">Current Stock</th>
+                <th className="p-4">Supplier</th>
+                <th className="p-4 text-right">ERP Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-900">
+              {filteredItems.map((item) => {
+                const isLowStock = item.stock <= item.minThreshold;
+                return (
+                  <tr key={item.id} className="hover:bg-slate-900/50 transition">
+                    <td className="p-4 font-mono text-slate-400">{item.sku}</td>
+                    <td className="p-4 font-semibold text-white">{item.name}</td>
+                    <td className="p-4">
+                      <span className="px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 font-medium">
+                        {item.category}
+                      </span>
+                    </td>
+                    <td className="p-4 font-mono">R {item.costPrice.toFixed(2)}</td>
+                    <td className="p-4 font-mono font-bold text-emerald-400">
+                      R {item.price.toFixed(2)}
+                    </td>
+                    <td className="p-4">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`font-mono font-bold px-2 py-0.5 rounded-md ${
+                            isLowStock
+                              ? 'bg-red-500/20 text-red-400 border border-red-500/30'
+                              : 'text-slate-200'
+                          }`}
+                        >
+                          {item.stock} units
+                        </span>
+                        {isLowStock && (
+                          <span className="text-[10px] text-red-400 font-semibold flex items-center gap-1 bg-red-950/60 px-2 py-0.5 rounded-md border border-red-800">
+                            <AlertTriangle className="w-3 h-3" /> LOW
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="p-4 text-slate-400">{item.supplier}</td>
+                    <td className="p-4 text-right">
+                      {isLowStock ? (
+                        <button
+                          onClick={() => handleGeneratePO(item)}
+                          className="bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/40 px-3 py-1.5 rounded-xl font-semibold text-[11px] inline-flex items-center gap-1.5 transition"
+                        >
+                          <FilePlus className="w-3.5 h-3.5" /> Auto-Draft PO
+                        </button>
+                      ) : (
+                        <span className="text-slate-600 text-[11px] font-mono">Stock Optimal</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }

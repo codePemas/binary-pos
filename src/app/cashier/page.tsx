@@ -358,7 +358,7 @@ export default function CashierPage() {
                 <h2 className="font-bold text-base tracking-wider uppercase">
                   FORTE SUPERMARKET
                 </h2>
-                <p className="text-[10px] text-gray-600">Alice Main Campus, Eastern Cape</p>
+                <p className="text-[10px] text-gray-600">Ocean Campus, Eastern Cape</p>
                 <p className="text-[10px] text-gray-600">VAT Reg #: 4092001928</p>
               </div>
 
