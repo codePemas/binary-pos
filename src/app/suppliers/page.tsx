@@ -9,6 +9,8 @@ interface PurchaseOrder {
   itemDetails: string;
   totalCost: number;
   status: 'PENDING' | 'DELIVERED';
+  sku?: string;
+  quantity?: number;
 }
 
 const DEFAULT_POS: PurchaseOrder[] = [
@@ -45,14 +47,34 @@ export default function SuppliersPage() {
     }
   }, []);
 
-  const markAsReceived = (id: string) => {
-    const updated = purchaseOrders.map((po) =>
-      po.id === id ? { ...po, status: 'DELIVERED' as const } : po
+  const markAsReceived = (poToReceive: PurchaseOrder) => {
+    // 1. Update Purchase Order status
+    const updatedPOs = purchaseOrders.map((po) =>
+      po.id === poToReceive.id ? { ...po, status: 'DELIVERED' as const } : po
     );
-    setPurchaseOrders(updated);
+    setPurchaseOrders(updatedPOs);
 
-    const localOnly = updated.filter((po) => !DEFAULT_POS.some((d) => d.id === po.id));
+    const localOnly = updatedPOs.filter((po) => !DEFAULT_POS.some((d) => d.id === po.id));
     localStorage.setItem('forte_purchase_orders', JSON.stringify(localOnly));
+
+    // 2. Update Inventory Stock Level in localStorage
+    if (poToReceive.sku && poToReceive.quantity) {
+      const savedInventory = localStorage.getItem('forte_inventory_items');
+      if (savedInventory) {
+        try {
+          const items = JSON.parse(savedInventory);
+          const updatedItems = items.map((item: any) => {
+            if (item.sku === poToReceive.sku) {
+              return { ...item, stock: item.stock + poToReceive.quantity };
+            }
+            return item;
+          });
+          localStorage.setItem('forte_inventory_items', JSON.stringify(updatedItems));
+        } catch (e) {
+          console.error('Failed to update inventory stock', e);
+        }
+      }
+    }
   };
 
   return (
@@ -178,7 +200,7 @@ export default function SuppliersPage() {
                   <td className="p-3.5 text-right">
                     {po.status === 'PENDING' ? (
                       <button
-                        onClick={() => markAsReceived(po.id)}
+                        onClick={() => markAsReceived(po)}
                         className="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-xl font-bold text-[11px] inline-flex items-center gap-1.5 transition"
                       >
                         <PackageCheck className="w-3.5 h-3.5" /> Receive Stock

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Package,
   AlertTriangle,
@@ -36,21 +36,40 @@ const INITIAL_INVENTORY: InventoryItem[] = [
 ];
 
 export default function InventoryPage() {
-  const [inventory] = useState<InventoryItem[]>(INITIAL_INVENTORY);
+  const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [activeNotification, setActiveNotification] = useState<string | null>(null);
+
+  // Load state from localStorage on mount
+  useEffect(() => {
+    const savedInventory = localStorage.getItem('forte_inventory_items');
+    if (savedInventory) {
+      try {
+        setInventory(JSON.parse(savedInventory));
+      } catch (e) {
+        setInventory(INITIAL_INVENTORY);
+        localStorage.setItem('forte_inventory_items', JSON.stringify(INITIAL_INVENTORY));
+      }
+    } else {
+      setInventory(INITIAL_INVENTORY);
+      localStorage.setItem('forte_inventory_items', JSON.stringify(INITIAL_INVENTORY));
+    }
+  }, []);
 
   const categories = ['ALL', 'Dairy', 'Bakery', 'Pantry', 'Produce'];
 
   const lowStockItems = inventory.filter((item) => item.stock <= item.minThreshold);
 
   const handleGeneratePO = (item: InventoryItem) => {
+    const restockQty = 50;
     const newPO = {
       id: `PO-${Math.floor(1000 + Math.random() * 9000)}`,
       supplier: item.supplier,
-      itemDetails: `${item.name} (x50)`,
-      totalCost: item.costPrice * 50,
+      sku: item.sku,
+      quantity: restockQty,
+      itemDetails: `${item.name} (x${restockQty})`,
+      totalCost: item.costPrice * restockQty,
       status: 'PENDING',
     };
 
