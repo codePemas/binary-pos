@@ -7,7 +7,6 @@ import {
   FilePlus,
   Search,
   ArrowUpRight,
-  Plus,
   CheckCircle2,
   X,
 } from 'lucide-react';
@@ -37,7 +36,7 @@ const INITIAL_INVENTORY: InventoryItem[] = [
 ];
 
 export default function InventoryPage() {
-  const [inventory, setInventory] = useState<InventoryItem[]>(INITIAL_INVENTORY);
+  const [inventory] = useState<InventoryItem[]>(INITIAL_INVENTORY);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [activeNotification, setActiveNotification] = useState<string | null>(null);
@@ -47,6 +46,17 @@ export default function InventoryPage() {
   const lowStockItems = inventory.filter((item) => item.stock <= item.minThreshold);
 
   const handleGeneratePO = (item: InventoryItem) => {
+    const newPO = {
+      id: `PO-${Math.floor(1000 + Math.random() * 9000)}`,
+      supplier: item.supplier,
+      itemDetails: `${item.name} (x50)`,
+      totalCost: item.costPrice * 50,
+      status: 'PENDING',
+    };
+
+    const existingPOs = JSON.parse(localStorage.getItem('forte_purchase_orders') || '[]');
+    localStorage.setItem('forte_purchase_orders', JSON.stringify([newPO, ...existingPOs]));
+
     setActiveNotification(
       `Draft Purchase Order for ${item.supplier} (${item.name}) generated! View on the Suppliers page.`
     );
@@ -64,9 +74,8 @@ export default function InventoryPage() {
 
   return (
     <div className="flex-1 p-6 space-y-6">
-      {/* Toast Alert Notification */}
       {activeNotification && (
-        <div className="fixed top-6 right-6 bg-emerald-950 border border-emerald-500 text-emerald-200 px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-3 z-50 animate-bounce">
+        <div className="fixed top-6 right-6 bg-emerald-950 border border-emerald-500 text-emerald-200 px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-3 z-50">
           <CheckCircle2 className="w-5 h-5 text-emerald-400" />
           <span className="text-xs font-semibold">{activeNotification}</span>
           <button onClick={() => setActiveNotification(null)} className="text-emerald-400 hover:text-white">
@@ -75,7 +84,6 @@ export default function InventoryPage() {
         </div>
       )}
 
-      {/* Top Banner & Low Stock Trigger Alert */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-slate-950 border border-slate-800 p-5 rounded-3xl flex items-center justify-between">
           <div>
@@ -113,7 +121,6 @@ export default function InventoryPage() {
         </div>
       </div>
 
-      {/* Control Bar: Search & Category Filter */}
       <div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-slate-950 p-4 rounded-3xl border border-slate-800">
         <div className="flex items-center gap-3 bg-slate-900 px-3 py-2 rounded-2xl border border-slate-800 w-full md:w-80">
           <Search className="w-4 h-4 text-slate-400" />
@@ -143,7 +150,6 @@ export default function InventoryPage() {
         </div>
       </div>
 
-      {/* Inventory Items Table */}
       <div className="bg-slate-950 border border-slate-800 rounded-3xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs text-slate-300">

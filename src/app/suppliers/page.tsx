@@ -1,171 +1,190 @@
 'use client';
 
-import { useState } from 'react';
-
-interface Supplier {
-  id: string;
-  name: string;
-  contactPerson: string;
-  email: string;
-  phone: string;
-  category: string;
-}
+import { useState, useEffect } from 'react';
+import { Truck, Plus, PackageCheck, Clock, CheckCircle, Mail, Phone } from 'lucide-react';
 
 interface PurchaseOrder {
   id: string;
-  supplierName: string;
-  itemDescription: string;
-  quantityOrdered: number;
+  supplier: string;
+  itemDetails: string;
   totalCost: number;
   status: 'PENDING' | 'DELIVERED';
-  orderDate: string;
 }
 
-const INITIAL_SUPPLIERS: Supplier[] = [
-  { id: '1', name: 'Clover SA', contactPerson: 'Sibusiso Dlamini', email: 'orders@clover.co.za', phone: '+27 43 701 1000', category: 'Dairy' },
-  { id: '2', name: 'Sasko Bakery', contactPerson: 'Nomsa Mbeki', email: 'supply@sasko.co.za', phone: '+27 43 702 2200', category: 'Bakery' },
-  { id: '3', name: 'Tiger Brands', contactPerson: 'Johan Pretorius', email: 'sales@tigerbrands.com', phone: '+27 43 703 3300', category: 'Pantry' },
-];
-
-const INITIAL_ORDERS: PurchaseOrder[] = [
-  { id: 'PO-8801', supplierName: 'Clover SA', itemDescription: 'Forte Whole Milk 2L (x50)', quantityOrdered: 50, totalCost: 1200.00, status: 'DELIVERED', orderDate: '2026-08-28' },
-  { id: 'PO-8802', supplierName: 'Sasko Bakery', itemDescription: 'White Bread 700g (x30)', quantityOrdered: 30, totalCost: 345.00, status: 'PENDING', orderDate: '2026-08-30' },
+const DEFAULT_POS: PurchaseOrder[] = [
+  {
+    id: 'PO-8801',
+    supplier: 'Clover SA',
+    itemDetails: 'Fresh Milk 2L (x50)',
+    totalCost: 1200.0,
+    status: 'DELIVERED',
+  },
+  {
+    id: 'PO-8802',
+    supplier: 'Sasko Bakery',
+    itemDetails: 'White Bread 700g (x30)',
+    totalCost: 345.0,
+    status: 'PENDING',
+  },
 ];
 
 export default function SuppliersPage() {
-  const [suppliers, setSuppliers] = useState<Supplier[]>(INITIAL_SUPPLIERS);
-  const [orders, setOrders] = useState<PurchaseOrder[]>(INITIAL_ORDERS);
-  
-  // Modal States
-  const [isAddSupplierModalOpen, setIsAddSupplierModalOpen] = useState(false);
-  const [isCreatePOModalOpen, setIsCreatePOModalOpen] = useState(false);
+  const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
 
-  // Supplier Form State
-  const [newSupplier, setNewSupplier] = useState({ name: '', contactPerson: '', email: '', phone: '', category: 'Dairy' });
+  useEffect(() => {
+    const savedPOs = localStorage.getItem('forte_purchase_orders');
+    if (savedPOs) {
+      try {
+        const parsed = JSON.parse(savedPOs);
+        setPurchaseOrders([...parsed, ...DEFAULT_POS]);
+      } catch (e) {
+        setPurchaseOrders(DEFAULT_POS);
+      }
+    } else {
+      setPurchaseOrders(DEFAULT_POS);
+    }
+  }, []);
 
-  // PO Form State
-  const [newPO, setNewPO] = useState({ supplierName: 'Clover SA', itemDescription: '', quantityOrdered: '', totalCost: '' });
+  const markAsReceived = (id: string) => {
+    const updated = purchaseOrders.map((po) =>
+      po.id === id ? { ...po, status: 'DELIVERED' as const } : po
+    );
+    setPurchaseOrders(updated);
 
-  const handleAddSupplier = (e: React.FormEvent) => {
-    e.preventDefault();
-    setSuppliers(prev => [...prev, { id: Date.now().toString(), ...newSupplier }]);
-    setIsAddSupplierModalOpen(false);
-    setNewSupplier({ name: '', contactPerson: '', email: '', phone: '', category: 'Dairy' });
-  };
-
-  const handleCreatePO = (e: React.FormEvent) => {
-    e.preventDefault();
-    setOrders(prev => [
-      {
-        id: `PO-${Math.floor(1000 + Math.random() * 9000)}`,
-        supplierName: newPO.supplierName,
-        itemDescription: newPO.itemDescription,
-        quantityOrdered: parseInt(newPO.quantityOrdered) || 0,
-        totalCost: parseFloat(newPO.totalCost) || 0,
-        status: 'PENDING',
-        orderDate: new Date().toISOString().split('T')[0],
-      },
-      ...prev,
-    ]);
-    setIsCreatePOModalOpen(false);
-    setNewPO({ supplierName: 'Clover SA', itemDescription: '', quantityOrdered: '', totalCost: '' });
-  };
-
-  const markAsDelivered = (orderId: string) => {
-    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'DELIVERED' } : o));
+    const localOnly = updated.filter((po) => !DEFAULT_POS.some((d) => d.id === po.id));
+    localStorage.setItem('forte_purchase_orders', JSON.stringify(localOnly));
   };
 
   return (
-    <div className="p-8 space-y-8 max-w-7xl mx-auto w-full">
-      {/* Page Header */}
-      <div className="flex justify-between items-center">
+    <div className="flex-1 p-6 space-y-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-black text-white tracking-tight">Supplier & Purchasing Portal</h1>
-          <p className="text-sm text-slate-400 mt-1">Manage wholesale vendors and process stock restock purchase orders.</p>
+          <h1 className="text-2xl font-bold text-white">Supplier & Purchasing Portal</h1>
+          <p className="text-xs text-slate-400">
+            Manage wholesale vendors and process stock restock purchase orders.
+          </p>
         </div>
-        <div className="flex gap-3">
-          <button
-            onClick={() => setIsAddSupplierModalOpen(true)}
-            className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-4 py-2.5 rounded-xl font-semibold text-sm transition"
-          >
-            + New Supplier
+        <div className="flex items-center gap-3">
+          <button className="bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2">
+            <Plus className="w-4 h-4" /> New Supplier
           </button>
-          <button
-            onClick={() => setIsCreatePOModalOpen(true)}
-            className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2.5 rounded-xl font-bold text-sm transition shadow-lg shadow-blue-600/20"
-          >
-            + Create Purchase Order
+          <button className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 shadow-lg shadow-blue-900/30">
+            <Plus className="w-4 h-4" /> Create Purchase Order
           </button>
         </div>
       </div>
 
-      {/* Supplier List */}
-      <div className="space-y-4">
-        <h2 className="text-xl font-bold text-white">Active Suppliers</h2>
-        <div className="grid grid-cols-3 gap-6">
-          {suppliers.map(s => (
-            <div key={s.id} className="bg-slate-800 border border-slate-700 p-5 rounded-2xl flex flex-col justify-between space-y-3">
-              <div>
-                <div className="flex justify-between items-start">
-                  <h3 className="font-bold text-lg text-white">{s.name}</h3>
-                  <span className="bg-blue-500/10 text-blue-400 text-xs px-2.5 py-0.5 rounded-full font-semibold border border-blue-500/20">
-                    {s.category}
-                  </span>
-                </div>
-                <p className="text-xs text-slate-400 mt-1">Contact: {s.contactPerson}</p>
+      <div>
+        <h3 className="text-sm font-bold text-white mb-3">Active Suppliers</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-slate-950 border border-slate-800 p-4 rounded-2xl space-y-3">
+            <div className="flex justify-between items-start">
+              <h4 className="font-bold text-white text-sm">Clover SA</h4>
+              <span className="text-[10px] bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded-md font-medium">
+                Dairy
+              </span>
+            </div>
+            <p className="text-xs text-slate-400">Contact: Sibusiso Dlamini</p>
+            <div className="space-y-1 pt-2 border-t border-slate-900 text-[11px] text-slate-400 font-mono">
+              <div className="flex items-center gap-2">
+                <Mail className="w-3.5 h-3.5 text-slate-500" /> orders@clover.co.za
               </div>
-              <div className="text-xs space-y-1 text-slate-300 font-mono pt-2 border-t border-slate-700/60">
-                <p>📧 {s.email}</p>
-                <p>📞 {s.phone}</p>
+              <div className="flex items-center gap-2">
+                <Phone className="w-3.5 h-3.5 text-slate-500" /> +27 43 701 1000
               </div>
             </div>
-          ))}
+          </div>
+
+          <div className="bg-slate-950 border border-slate-800 p-4 rounded-2xl space-y-3">
+            <div className="flex justify-between items-start">
+              <h4 className="font-bold text-white text-sm">Sasko Bakery</h4>
+              <span className="text-[10px] bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded-md font-medium">
+                Bakery
+              </span>
+            </div>
+            <p className="text-xs text-slate-400">Contact: Nomsa Mbeki</p>
+            <div className="space-y-1 pt-2 border-t border-slate-900 text-[11px] text-slate-400 font-mono">
+              <div className="flex items-center gap-2">
+                <Mail className="w-3.5 h-3.5 text-slate-500" /> supply@sasko.co.za
+              </div>
+              <div className="flex items-center gap-2">
+                <Phone className="w-3.5 h-3.5 text-slate-500" /> +27 43 702 2200
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-slate-950 border border-slate-800 p-4 rounded-2xl space-y-3">
+            <div className="flex justify-between items-start">
+              <h4 className="font-bold text-white text-sm">Nestlé Foods</h4>
+              <span className="text-[10px] bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded-md font-medium">
+                Pantry
+              </span>
+            </div>
+            <p className="text-xs text-slate-400">Contact: Johan Pretorius</p>
+            <div className="space-y-1 pt-2 border-t border-slate-900 text-[11px] text-slate-400 font-mono">
+              <div className="flex items-center gap-2">
+                <Mail className="w-3.5 h-3.5 text-slate-500" /> sales@nestle.co.za
+              </div>
+              <div className="flex items-center gap-2">
+                <Phone className="w-3.5 h-3.5 text-slate-500" /> +27 43 703 3300
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Purchase Orders Table */}
-      <div className="space-y-4">
-        <h2 className="text-xl font-bold text-white">Purchase Orders & Deliveries</h2>
-        <div className="bg-slate-800 rounded-2xl border border-slate-700 overflow-hidden">
-          <table className="w-full text-left text-sm text-slate-300">
-            <thead className="bg-slate-900 text-xs text-slate-400 uppercase font-semibold border-b border-slate-700">
+      <div className="bg-slate-950 border border-slate-800 rounded-3xl p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-bold text-white flex items-center gap-2">
+            <Truck className="w-4 h-4 text-blue-400" /> Purchase Orders & Deliveries
+          </h3>
+          <span className="text-xs text-slate-400 font-mono">
+            {purchaseOrders.length} Total Orders
+          </span>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs text-slate-300">
+            <thead className="bg-slate-900/80 text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-800">
               <tr>
-                <th className="p-4">PO Number</th>
-                <th className="p-4">Supplier</th>
-                <th className="p-4">Item Details</th>
-                <th className="p-4">Total Cost</th>
-                <th className="p-4">Status</th>
-                <th className="p-4 text-right">Action</th>
+                <th className="p-3.5">PO Number</th>
+                <th className="p-3.5">Supplier</th>
+                <th className="p-3.5">Item Details</th>
+                <th className="p-3.5">Total Cost</th>
+                <th className="p-3.5">Status</th>
+                <th className="p-3.5 text-right">Action</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-700/50">
-              {orders.map(order => (
-                <tr key={order.id} className="hover:bg-slate-750/50">
-                  <td className="p-4 font-mono text-slate-400 font-bold">{order.id}</td>
-                  <td className="p-4 font-semibold text-white">{order.supplierName}</td>
-                  <td className="p-4">{order.itemDescription}</td>
-                  <td className="p-4 font-mono text-emerald-400 font-bold">R{order.totalCost.toFixed(2)}</td>
-                  <td className="p-4">
-                    <span
-                      className={`text-xs px-2.5 py-1 rounded-md font-bold ${
-                        order.status === 'DELIVERED'
-                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                          : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                      }`}
-                    >
-                      {order.status}
-                    </span>
+            <tbody className="divide-y divide-slate-900">
+              {purchaseOrders.map((po) => (
+                <tr key={po.id} className="hover:bg-slate-900/50 transition">
+                  <td className="p-3.5 font-mono font-semibold text-blue-400">{po.id}</td>
+                  <td className="p-3.5 font-semibold text-white">{po.supplier}</td>
+                  <td className="p-3.5 text-slate-300">{po.itemDetails}</td>
+                  <td className="p-3.5 font-mono font-bold text-emerald-400">
+                    R {po.totalCost.toFixed(2)}
                   </td>
-                  <td className="p-4 text-right">
-                    {order.status === 'PENDING' ? (
+                  <td className="p-3.5">
+                    {po.status === 'DELIVERED' ? (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2.5 py-1 rounded-lg">
+                        <CheckCircle className="w-3 h-3" /> DELIVERED
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2.5 py-1 rounded-lg">
+                        <Clock className="w-3 h-3" /> PENDING
+                      </span>
+                    )}
+                  </td>
+                  <td className="p-3.5 text-right">
+                    {po.status === 'PENDING' ? (
                       <button
-                        onClick={() => markAsDelivered(order.id)}
-                        className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-3 py-1.5 rounded-lg font-bold"
+                        onClick={() => markAsReceived(po.id)}
+                        className="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-xl font-bold text-[11px] inline-flex items-center gap-1.5 transition"
                       >
-                        Receive Stock
+                        <PackageCheck className="w-3.5 h-3.5" /> Receive Stock
                       </button>
                     ) : (
-                      <span className="text-xs text-slate-500">Completed</span>
+                      <span className="text-slate-600 text-[11px] font-mono">Completed</span>
                     )}
                   </td>
                 </tr>
@@ -174,120 +193,6 @@ export default function SuppliersPage() {
           </table>
         </div>
       </div>
-
-      {/* Modal: Add Supplier */}
-      {isAddSupplierModalOpen && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
-          <form onSubmit={handleAddSupplier} className="bg-slate-800 border border-slate-700 p-6 rounded-2xl w-full max-w-md space-y-4">
-            <h3 className="text-xl font-bold text-white">Register Supplier</h3>
-            <div>
-              <label className="text-xs text-slate-400 font-semibold block mb-1">Company Name</label>
-              <input
-                type="text"
-                required
-                className="w-full bg-slate-900 border border-slate-700 p-2.5 rounded-xl text-sm text-white focus:outline-none"
-                value={newSupplier.name}
-                onChange={e => setNewSupplier({ ...newSupplier, name: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className="text-xs text-slate-400 font-semibold block mb-1">Contact Person</label>
-              <input
-                type="text"
-                required
-                className="w-full bg-slate-900 border border-slate-700 p-2.5 rounded-xl text-sm text-white focus:outline-none"
-                value={newSupplier.contactPerson}
-                onChange={e => setNewSupplier({ ...newSupplier, contactPerson: e.target.value })}
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs text-slate-400 font-semibold block mb-1">Email</label>
-                <input
-                  type="email"
-                  required
-                  className="w-full bg-slate-900 border border-slate-700 p-2.5 rounded-xl text-sm text-white focus:outline-none"
-                  value={newSupplier.email}
-                  onChange={e => setNewSupplier({ ...newSupplier, email: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="text-xs text-slate-400 font-semibold block mb-1">Phone</label>
-                <input
-                  type="text"
-                  required
-                  className="w-full bg-slate-900 border border-slate-700 p-2.5 rounded-xl text-sm text-white focus:outline-none"
-                  value={newSupplier.phone}
-                  onChange={e => setNewSupplier({ ...newSupplier, phone: e.target.value })}
-                />
-              </div>
-            </div>
-            <div className="flex gap-3 pt-4 border-t border-slate-700">
-              <button type="button" onClick={() => setIsAddSupplierModalOpen(false)} className="flex-1 py-2 rounded-xl bg-slate-700 text-slate-300 font-semibold text-sm">Cancel</button>
-              <button type="submit" className="flex-1 py-2 rounded-xl bg-blue-600 text-white font-bold text-sm">Save</button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {/* Modal: Create Purchase Order */}
-      {isCreatePOModalOpen && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
-          <form onSubmit={handleCreatePO} className="bg-slate-800 border border-slate-700 p-6 rounded-2xl w-full max-w-md space-y-4">
-            <h3 className="text-xl font-bold text-white">Create Purchase Order</h3>
-            <div>
-              <label className="text-xs text-slate-400 font-semibold block mb-1">Supplier</label>
-              <select
-                className="w-full bg-slate-900 border border-slate-700 p-2.5 rounded-xl text-sm text-white focus:outline-none"
-                value={newPO.supplierName}
-                onChange={e => setNewPO({ ...newPO, supplierName: e.target.value })}
-              >
-                {suppliers.map(s => (
-                  <option key={s.id} value={s.name}>{s.name}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs text-slate-400 font-semibold block mb-1">Items Description</label>
-              <input
-                type="text"
-                placeholder="e.g. Maize Meal 5kg (x40)"
-                required
-                className="w-full bg-slate-900 border border-slate-700 p-2.5 rounded-xl text-sm text-white focus:outline-none"
-                value={newPO.itemDescription}
-                onChange={e => setNewPO({ ...newPO, itemDescription: e.target.value })}
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs text-slate-400 font-semibold block mb-1">Quantity</label>
-                <input
-                  type="number"
-                  required
-                  className="w-full bg-slate-900 border border-slate-700 p-2.5 rounded-xl text-sm text-white focus:outline-none"
-                  value={newPO.quantityOrdered}
-                  onChange={e => setNewPO({ ...newPO, quantityOrdered: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="text-xs text-slate-400 font-semibold block mb-1">Total Cost (ZAR)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  required
-                  className="w-full bg-slate-900 border border-slate-700 p-2.5 rounded-xl text-sm text-white focus:outline-none"
-                  value={newPO.totalCost}
-                  onChange={e => setNewPO({ ...newPO, totalCost: e.target.value })}
-                />
-              </div>
-            </div>
-            <div className="flex gap-3 pt-4 border-t border-slate-700">
-              <button type="button" onClick={() => setIsCreatePOModalOpen(false)} className="flex-1 py-2 rounded-xl bg-slate-700 text-slate-300 font-semibold text-sm">Cancel</button>
-              <button type="submit" className="flex-1 py-2 rounded-xl bg-blue-600 text-white font-bold text-sm">Submit PO</button>
-            </div>
-          </form>
-        </div>
-      )}
     </div>
   );
 }
