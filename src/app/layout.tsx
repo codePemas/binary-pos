@@ -13,6 +13,7 @@ import {
   Award,
   Store,
   ShieldCheck,
+  Settings,
   LogOut,
   UserCheck,
   Menu,
@@ -32,6 +33,7 @@ const ALL_NAV_ITEMS = [
   { name: 'Suppliers', href: '/suppliers', icon: Truck, roles: ['Store Manager'] },
   { name: 'Staff & Shifts', href: '/staff', icon: Users, roles: ['Store Manager'] },
   { name: 'Customers', href: '/customers', icon: Award, roles: ['Store Manager'] },
+  { name: 'Settings', href: '/settings', icon: Settings, roles: ['Store Manager'] },
 ];
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
