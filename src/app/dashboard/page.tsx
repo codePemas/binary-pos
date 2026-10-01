@@ -1,200 +1,242 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import {
+  TrendingUp,
+  DollarSign,
+  ShoppingCart,
+  AlertTriangle,
+  ArrowUpRight,
+  Package,
+  Truck,
+  Users,
+  Activity,
+} from 'lucide-react';
+import Link from 'next/link';
 
-interface ShiftCashUp {
-  terminalId: string;
-  cashierName: string;
-  systemExpected: number;
-  cashCounted: number;
-  cardCounted: number;
-  variance: number;
-  status: 'RECONCILED' | 'DISCREPANCY';
+interface DashboardStats {
+  totalRevenue: number;
+  totalTransactions: number;
+  lowStockCount: number;
+  pendingPOs: number;
 }
 
-const DASHBOARD_METRICS = {
-  dailySales: 14850.50,
-  transactionsCount: 142,
-  avgBasketSize: 104.58,
-  grossProfitMargin: 28.4,
-};
-
-const INITIAL_CASHUPS: ShiftCashUp[] = [
-  {
-    terminalId: 'Terminal 01',
-    cashierName: 'Avela M.',
-    systemExpected: 8450.00,
-    cashCounted: 4200.00,
-    cardCounted: 4250.00,
-    variance: 0.00,
-    status: 'RECONCILED',
-  },
-  {
-    terminalId: 'Terminal 02',
-    cashierName: 'Sipho K.',
-    systemExpected: 6400.50,
-    cashCounted: 3100.00,
-    cardCounted: 3280.00,
-    variance: -20.50,
-    status: 'DISCREPANCY',
-  },
-];
-
 export default function DashboardPage() {
-  const [cashups] = useState<ShiftCashUp[]>(INITIAL_CASHUPS);
+  const [stats, setStats] = useState<DashboardStats>({
+    totalRevenue: 14280.50,
+    totalTransactions: 184,
+    lowStockCount: 0,
+    pendingPOs: 0,
+  });
+
+  useEffect(() => {
+    // Read dynamic low stock count from localStorage
+    const savedInventory = localStorage.getItem('forte_inventory_items');
+    if (savedInventory) {
+      try {
+        const items = JSON.parse(savedInventory);
+        const low = items.filter((i: any) => i.stock <= i.minThreshold).length;
+        setStats((prev) => ({ ...prev, lowStockCount: low }));
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    // Read dynamic pending purchase orders count from localStorage
+    const savedPOs = localStorage.getItem('forte_purchase_orders');
+    if (savedPOs) {
+      try {
+        const pos = JSON.parse(savedPOs);
+        const pending = pos.filter((p: any) => p.status === 'PENDING').length;
+        setStats((prev) => ({ ...prev, pendingPOs: pending }));
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  }, []);
 
   return (
-    <div className="p-8 space-y-8 max-w-7xl mx-auto w-full">
-      {/* Header */}
-      <div className="flex justify-between items-center">
+    <div className="flex-1 p-6 space-y-6">
+      {/* Header Banner */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-black text-white tracking-tight">Executive Dashboard & Cash-Up</h1>
-          <p className="text-sm text-slate-400 mt-1">Real-time revenue metrics, inventory turnover, and register balancing.</p>
+          <h1 className="text-2xl font-bold text-white">Manager Executive Dashboard</h1>
+          <p className="text-xs text-slate-400">
+            Real-time sales insights, inventory turnover, and operational KPIs for Forte Supermarket.
+          </p>
         </div>
-        <div className="flex items-center space-x-2 bg-slate-800 border border-slate-700 px-4 py-2 rounded-xl text-xs text-slate-300 font-mono">
-          <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-ping"></span>
-          <span>Live Store Sync Active</span>
+        <div className="flex items-center gap-3">
+          <Link
+            href="/cashier"
+            className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 shadow-lg shadow-blue-900/30 transition"
+          >
+            <ShoppingCart className="w-4 h-4" /> Open POS Terminal
+          </Link>
         </div>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-4 gap-6">
-        <div className="bg-slate-800 p-5 rounded-2xl border border-slate-700">
-          <p className="text-xs text-slate-400 font-semibold uppercase">Daily Gross Sales</p>
-          <p className="text-3xl font-black text-emerald-400 mt-1">
-            R{DASHBOARD_METRICS.dailySales.toLocaleString('en-ZA', { minimumFractionDigits: 2 })}
-          </p>
-          <p className="text-[10px] text-emerald-500 font-semibold mt-2">↑ +14% vs yesterday</p>
-        </div>
-
-        <div className="bg-slate-800 p-5 rounded-2xl border border-slate-700">
-          <p className="text-xs text-slate-400 font-semibold uppercase">Total Transactions</p>
-          <p className="text-3xl font-black text-white mt-1">{DASHBOARD_METRICS.transactionsCount}</p>
-          <p className="text-[10px] text-slate-400 font-semibold mt-2">Peak hour: 12:00 - 13:00</p>
-        </div>
-
-        <div className="bg-slate-800 p-5 rounded-2xl border border-slate-700">
-          <p className="text-xs text-slate-400 font-semibold uppercase">Avg Basket Value</p>
-          <p className="text-3xl font-black text-blue-400 mt-1">
-            R{DASHBOARD_METRICS.avgBasketSize.toFixed(2)}
-          </p>
-          <p className="text-[10px] text-slate-400 font-semibold mt-2">~3.8 items per sale</p>
-        </div>
-
-        <div className="bg-slate-800 p-5 rounded-2xl border border-slate-700">
-          <p className="text-xs text-slate-400 font-semibold uppercase">Gross Margin</p>
-          <p className="text-3xl font-black text-amber-400 mt-1">{DASHBOARD_METRICS.grossProfitMargin}%</p>
-          <p className="text-[10px] text-amber-500 font-semibold mt-2">Target: &gt;25.0%</p>
-        </div>
-      </div>
-
-      {/* Visual Revenue Breakdown & Top Categories */}
-      <div className="grid grid-cols-3 gap-6">
-        <div className="col-span-2 bg-slate-800 p-6 rounded-2xl border border-slate-700 space-y-4">
-          <h3 className="text-lg font-bold text-white">Category Revenue Share</h3>
-          <div className="space-y-3">
-            <div>
-              <div className="flex justify-between text-xs font-semibold text-slate-300 mb-1">
-                <span>Dairy & Refrigerated</span>
-                <span className="font-mono text-emerald-400">R6,450.00 (43%)</span>
-              </div>
-              <div className="w-full bg-slate-900 rounded-full h-3 overflow-hidden border border-slate-700">
-                <div className="bg-blue-500 h-full rounded-full" style={{ width: '43%' }}></div>
-              </div>
-            </div>
-
-            <div>
-              <div className="flex justify-between text-xs font-semibold text-slate-300 mb-1">
-                <span>Pantry Staples</span>
-                <span className="font-mono text-emerald-400">R5,200.00 (35%)</span>
-              </div>
-              <div className="w-full bg-slate-900 rounded-full h-3 overflow-hidden border border-slate-700">
-                <div className="bg-emerald-500 h-full rounded-full" style={{ width: '35%' }}></div>
-              </div>
-            </div>
-
-            <div>
-              <div className="flex justify-between text-xs font-semibold text-slate-300 mb-1">
-                <span>Bakery</span>
-                <span className="font-mono text-emerald-400">R3,200.50 (22%)</span>
-              </div>
-              <div className="w-full bg-slate-900 rounded-full h-3 overflow-hidden border border-slate-700">
-                <div className="bg-amber-500 h-full rounded-full" style={{ width: '22%' }}></div>
-              </div>
-            </div>
+      {/* Top Level Metric Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-slate-950 border border-slate-800 p-5 rounded-3xl flex items-center justify-between">
+          <div>
+            <p className="text-xs text-slate-400 font-semibold uppercase">Daily Revenue</p>
+            <p className="text-2xl font-bold text-emerald-400 mt-1">
+              R {stats.totalRevenue.toLocaleString('en-ZA', { minimumFractionDigits: 2 })}
+            </p>
+            <span className="text-[10px] text-emerald-500 font-medium inline-flex items-center gap-1 mt-1">
+              <TrendingUp className="w-3 h-3" /> +14.2% vs yesterday
+            </span>
+          </div>
+          <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl text-emerald-400">
+            <DollarSign className="w-6 h-6" />
           </div>
         </div>
 
-        <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 space-y-4">
-          <h3 className="text-lg font-bold text-white">Payment Method Split</h3>
+        <div className="bg-slate-950 border border-slate-800 p-5 rounded-3xl flex items-center justify-between">
+          <div>
+            <p className="text-xs text-slate-400 font-semibold uppercase">Transactions</p>
+            <p className="text-2xl font-bold text-white mt-1">{stats.totalTransactions}</p>
+            <span className="text-[10px] text-slate-400 font-medium block mt-1">
+              Avg Basket: R 77.61
+            </span>
+          </div>
+          <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-2xl text-blue-400">
+            <ShoppingCart className="w-6 h-6" />
+          </div>
+        </div>
+
+        <div className="bg-slate-950 border border-slate-800 p-5 rounded-3xl flex items-center justify-between">
+          <div>
+            <p className="text-xs text-slate-400 font-semibold uppercase">Stock Alerts</p>
+            <p className="text-2xl font-bold text-amber-400 mt-1">{stats.lowStockCount} Items</p>
+            <Link
+              href="/inventory"
+              className="text-[10px] text-amber-400 hover:underline font-semibold inline-flex items-center gap-1 mt-1"
+            >
+              Resolve in Inventory <ArrowUpRight className="w-3 h-3" />
+            </Link>
+          </div>
+          <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-2xl text-amber-400">
+            <AlertTriangle className="w-6 h-6" />
+          </div>
+        </div>
+
+        <div className="bg-slate-950 border border-slate-800 p-5 rounded-3xl flex items-center justify-between">
+          <div>
+            <p className="text-xs text-slate-400 font-semibold uppercase">Pending POs</p>
+            <p className="text-2xl font-bold text-purple-400 mt-1">{stats.pendingPOs} Orders</p>
+            <Link
+              href="/suppliers"
+              className="text-[10px] text-purple-400 hover:underline font-semibold inline-flex items-center gap-1 mt-1"
+            >
+              View Supplier Portal <ArrowUpRight className="w-3 h-3" />
+            </Link>
+          </div>
+          <div className="p-3 bg-purple-500/10 border border-purple-500/20 rounded-2xl text-purple-400">
+            <Truck className="w-6 h-6" />
+          </div>
+        </div>
+      </div>
+
+      {/* Analytics Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Category Revenue Performance */}
+        <div className="lg:col-span-2 bg-slate-950 border border-slate-800 rounded-3xl p-6 space-y-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-bold text-white">Department Revenue Distribution</h3>
+              <p className="text-xs text-slate-400">Breakdown of gross sales across product categories</p>
+            </div>
+            <span className="text-xs font-mono text-slate-400 bg-slate-900 border border-slate-800 px-3 py-1 rounded-xl">
+              Today
+            </span>
+          </div>
+
           <div className="space-y-4 pt-2">
-            <div className="flex justify-between items-center bg-slate-900 p-3 rounded-xl border border-slate-700">
-              <div className="flex items-center space-x-3">
-                <span className="text-xl">💳</span>
-                <div>
-                  <p className="text-xs font-bold text-white">Card Payments</p>
-                  <p className="text-[10px] text-slate-400">54% of sales</p>
-                </div>
+            <div>
+              <div className="flex justify-between text-xs font-semibold text-slate-300 mb-1.5">
+                <span>Dairy (Milk, Cheese, Eggs)</span>
+                <span className="font-mono text-emerald-400">R 5,840.00 (41%)</span>
               </div>
-              <span className="font-mono font-bold text-white text-sm">R8,019.27</span>
+              <div className="w-full bg-slate-900 h-2.5 rounded-full overflow-hidden border border-slate-800">
+                <div className="bg-blue-500 h-full rounded-full" style={{ width: '41%' }} />
+              </div>
             </div>
 
-            <div className="flex justify-between items-center bg-slate-900 p-3 rounded-xl border border-slate-700">
-              <div className="flex items-center space-x-3">
-                <span className="text-xl">💵</span>
-                <div>
-                  <p className="text-xs font-bold text-white">Cash Transactions</p>
-                  <p className="text-[10px] text-slate-400">46% of sales</p>
-                </div>
+            <div>
+              <div className="flex justify-between text-xs font-semibold text-slate-300 mb-1.5">
+                <span>Bakery (Fresh Bread, Confectionery)</span>
+                <span className="font-mono text-emerald-400">R 3,920.50 (27%)</span>
               </div>
-              <span className="font-mono font-bold text-white text-sm">R6,831.23</span>
+              <div className="w-full bg-slate-900 h-2.5 rounded-full overflow-hidden border border-slate-800">
+                <div className="bg-purple-500 h-full rounded-full" style={{ width: '27%' }} />
+              </div>
+            </div>
+
+            <div>
+              <div className="flex justify-between text-xs font-semibold text-slate-300 mb-1.5">
+                <span>Pantry (Rice, Coffee, Oils)</span>
+                <span className="font-mono text-emerald-400">R 2,980.00 (21%)</span>
+              </div>
+              <div className="w-full bg-slate-900 h-2.5 rounded-full overflow-hidden border border-slate-800">
+                <div className="bg-amber-500 h-full rounded-full" style={{ width: '21%' }} />
+              </div>
+            </div>
+
+            <div>
+              <div className="flex justify-between text-xs font-semibold text-slate-300 mb-1.5">
+                <span>Produce (Fresh Fruit & Vegetables)</span>
+                <span className="font-mono text-emerald-400">R 1,540.00 (11%)</span>
+              </div>
+              <div className="w-full bg-slate-900 h-2.5 rounded-full overflow-hidden border border-slate-800">
+                <div className="bg-emerald-500 h-full rounded-full" style={{ width: '11%' }} />
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Terminal Cash-Up Reconciliation */}
-      <div className="space-y-4">
-        <h2 className="text-xl font-bold text-white">Shift Cash-Up & Reconciliation</h2>
-        <div className="bg-slate-800 rounded-2xl border border-slate-700 overflow-hidden">
-          <table className="w-full text-left text-sm text-slate-300">
-            <thead className="bg-slate-900 text-xs text-slate-400 uppercase font-semibold border-b border-slate-700">
-              <tr>
-                <th className="p-4">Terminal</th>
-                <th className="p-4">Cashier</th>
-                <th className="p-4">Expected System Total</th>
-                <th className="p-4">Cash Counted</th>
-                <th className="p-4">Card Counted</th>
-                <th className="p-4">Variance</th>
-                <th className="p-4 text-right">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-700/50">
-              {cashups.map((c, i) => (
-                <tr key={i} className="hover:bg-slate-750/50">
-                  <td className="p-4 font-bold text-white">{c.terminalId}</td>
-                  <td className="p-4 font-medium text-slate-300">{c.cashierName}</td>
-                  <td className="p-4 font-mono text-slate-300">R{c.systemExpected.toFixed(2)}</td>
-                  <td className="p-4 font-mono text-slate-300">R{c.cashCounted.toFixed(2)}</td>
-                  <td className="p-4 font-mono text-slate-300">R{c.cardCounted.toFixed(2)}</td>
-                  <td className={`p-4 font-mono font-bold ${c.variance < 0 ? 'text-red-400' : 'text-emerald-400'}`}>
-                    {c.variance < 0 ? `-R${Math.abs(c.variance).toFixed(2)}` : 'R0.00'}
-                  </td>
-                  <td className="p-4 text-right">
-                    <span
-                      className={`text-xs px-2.5 py-1 rounded-md font-bold ${
-                        c.status === 'RECONCILED'
-                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                          : 'bg-red-500/20 text-red-400 border border-red-500/30'
-                      }`}
-                    >
-                      {c.status}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        {/* Live Operational Audit Feed */}
+        <div className="bg-slate-950 border border-slate-800 rounded-3xl p-6 space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-900 pb-3">
+            <h3 className="text-sm font-bold text-white flex items-center gap-2">
+              <Activity className="w-4 h-4 text-blue-400" /> Operational Feed
+            </h3>
+            <span className="text-[10px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-md font-semibold">
+              LIVE
+            </span>
+          </div>
+
+          <div className="space-y-3.5 text-xs">
+            <div className="p-3 bg-slate-900/60 rounded-2xl border border-slate-800/80 space-y-1">
+              <div className="flex justify-between font-semibold text-white">
+                <span>Sale Completed</span>
+                <span className="text-[10px] text-slate-500 font-mono">10 mins ago</span>
+              </div>
+              <p className="text-slate-400 text-[11px]">
+                POS Terminal #01 processed receipt <span className="font-mono text-blue-400">#FT-8921</span> (R 115.49).
+              </p>
+            </div>
+
+            <div className="p-3 bg-slate-900/60 rounded-2xl border border-slate-800/80 space-y-1">
+              <div className="flex justify-between font-semibold text-amber-400">
+                <span>Auto PO Generated</span>
+                <span className="text-[10px] text-slate-500 font-mono">25 mins ago</span>
+              </div>
+              <p className="text-slate-400 text-[11px]">
+                Low stock threshold triggered for Instant Coffee 200g.
+              </p>
+            </div>
+
+            <div className="p-3 bg-slate-900/60 rounded-2xl border border-slate-800/80 space-y-1">
+              <div className="flex justify-between font-semibold text-emerald-400">
+                <span>Stock Restocked</span>
+                <span className="text-[10px] text-slate-500 font-mono">1 hour ago</span>
+              </div>
+              <p className="text-slate-400 text-[11px]">
+                Received purchase order from Clover SA (+50 units Fresh Milk 2L).
+              </p>
+            </div>
+          </div>
         </div>
       </div>
     </div>
