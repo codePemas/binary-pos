@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import './globals.css';
 import {
   LayoutDashboard,
@@ -17,6 +17,7 @@ import {
   UserCheck,
   Menu,
   X,
+  Lock,
 } from 'lucide-react';
 
 interface CurrentUser {
@@ -24,8 +25,18 @@ interface CurrentUser {
   role: 'Store Manager' | 'Cashier' | 'Stock Controller';
 }
 
+const ALL_NAV_ITEMS = [
+  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, roles: ['Store Manager'] },
+  { name: 'POS Terminal', href: '/cashier', icon: ShoppingCart, roles: ['Store Manager', 'Cashier', 'Stock Controller'] },
+  { name: 'Inventory', href: '/inventory', icon: Package, roles: ['Store Manager', 'Stock Controller'] },
+  { name: 'Suppliers', href: '/suppliers', icon: Truck, roles: ['Store Manager'] },
+  { name: 'Staff & Shifts', href: '/staff', icon: Users, roles: ['Store Manager'] },
+  { name: 'Customers', href: '/customers', icon: Award, roles: ['Store Manager'] },
+];
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [currentUser, setCurrentUser] = useState<CurrentUser>({
     name: 'Sipho Ndlovu',
@@ -34,24 +45,34 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   const [isSwitchRoleOpen, setIsSwitchRoleOpen] = useState(false);
   const [pinInput, setPinInput] = useState('');
   const [selectedRole, setSelectedRole] = useState<'Store Manager' | 'Cashier'>('Cashier');
+  const [isAccessDenied, setIsAccessDenied] = useState(false);
 
   useEffect(() => {
     const savedUser = localStorage.getItem('forte_current_user');
     if (savedUser) {
       try {
-        setCurrentUser(JSON.parse(savedUser));
-      } catch (e) {}
+        const parsed = JSON.parse(savedUser);
+        setCurrentUser(parsed);
+        checkRouteAccess(pathname, parsed.role);
+      } catch (e) {
+        checkRouteAccess(pathname, currentUser.role);
+      }
+    } else {
+      checkRouteAccess(pathname, currentUser.role);
     }
-  }, []);
+  }, [pathname]);
 
-  const navItems = [
-    { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-    { name: 'POS Terminal', href: '/cashier', icon: ShoppingCart },
-    { name: 'Inventory', href: '/inventory', icon: Package },
-    { name: 'Suppliers', href: '/suppliers', icon: Truck },
-    { name: 'Staff & Shifts', href: '/staff', icon: Users },
-    { name: 'Customers', href: '/customers', icon: Award },
-  ];
+  const checkRouteAccess = (path: string, role: string) => {
+    const currentNavItem = ALL_NAV_ITEMS.find((item) => item.href === path);
+    if (currentNavItem && !currentNavItem.roles.includes(role)) {
+      setIsAccessDenied(true);
+      if (role === 'Cashier') {
+        router.push('/cashier');
+      }
+    } else {
+      setIsAccessDenied(false);
+    }
+  };
 
   const handleRoleSwitch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -65,12 +86,20 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     localStorage.setItem('forte_current_user', JSON.stringify(newUser));
     setIsSwitchRoleOpen(false);
     setPinInput('');
+
+    if (selectedRole === 'Cashier' && pathname !== '/cashier') {
+      router.push('/cashier');
+    }
   };
+
+  const allowedNavItems = ALL_NAV_ITEMS.filter((item) =>
+    item.roles.includes(currentUser.role)
+  );
 
   return (
     <html lang="en">
       <body className="bg-slate-900 text-slate-100 min-h-screen flex flex-col md:flex-row font-sans antialiased">
-        {/* Mobile Top Header */}
+        {/* Mobile Header */}
         <header className="md:hidden flex items-center justify-between px-4 py-3 bg-slate-950 border-b border-slate-800 sticky top-0 z-40">
           <div className="flex items-center gap-2">
             <div className="p-1.5 bg-blue-600 rounded-lg text-white">
@@ -86,7 +115,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </button>
         </header>
 
-        {/* Sidebar Navigation */}
+        {/* Sidebar */}
         <aside
           className={`${
             isMobileMenuOpen ? 'block' : 'hidden'
@@ -103,9 +132,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               </div>
             </div>
 
-            {/* Navigation Links */}
+            {/* Filtered Nav Links */}
             <nav className="space-y-1">
-              {navItems.map((item) => {
+              {allowedNavItems.map((item) => {
                 const Icon = item.icon;
                 const isActive = pathname === item.href;
                 return (
@@ -127,7 +156,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </nav>
           </div>
 
-          {/* User Profile Footer & Switch Role Trigger */}
+          {/* Role Status & Switcher */}
           <div className="pt-4 border-t border-slate-900 mt-6 md:mt-0">
             <div className="bg-slate-900/80 p-3 rounded-2xl border border-slate-800 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
@@ -164,8 +193,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   <UserCheck className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-white">Switch Terminal Active User</h3>
-                  <p className="text-[11px] text-slate-400">Select user role & authorize with PIN</p>
+                  <h3 className="text-sm font-bold text-white">Switch Active Staff Role</h3>
+                  <p className="text-[11px] text-slate-400">Select target role & authorize with PIN</p>
                 </div>
               </div>
 
@@ -212,8 +241,22 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </div>
         )}
 
-        {/* Main Content Area */}
-        <main className="flex-1 overflow-y-auto">{children}</main>
+        {/* Main Content View with Route Protection Notice */}
+        <main className="flex-1 overflow-y-auto">
+          {isAccessDenied ? (
+            <div className="flex flex-col items-center justify-center h-full p-6 text-center space-y-3">
+              <div className="p-4 bg-red-500/10 border border-red-500/20 text-red-400 rounded-3xl">
+                <Lock className="w-8 h-8" />
+              </div>
+              <h2 className="text-lg font-bold text-white">Access Restricted</h2>
+              <p className="text-xs text-slate-400 max-w-sm">
+                Your role (<span className="text-emerald-400 font-mono">{currentUser.role}</span>) does not have permission to access manager pages. Redirecting to terminal...
+              </p>
+            </div>
+          ) : (
+            children
+          )}
+        </main>
       </body>
     </html>
   );
