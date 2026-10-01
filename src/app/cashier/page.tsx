@@ -9,7 +9,6 @@ import {
   Trash2,
   CheckCircle,
   Printer,
-  X,
   CreditCard,
   Banknote,
   Award,
@@ -70,7 +69,7 @@ export default function CashierPage() {
   const [amountTendered, setAmountTendered] = useState<string>('');
   const [completedSale, setCompletedSale] = useState<CompletedSale | null>(null);
 
-  // Customer Loyalty Integration
+  // Customer Loyalty
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [customerSearch, setCustomerSearch] = useState('');
@@ -81,14 +80,22 @@ export default function CashierPage() {
   useEffect(() => {
     const savedProducts = localStorage.getItem('forte_inventory_items');
     if (savedProducts) {
-      try { setProducts(JSON.parse(savedProducts)); } catch (e) { setProducts(DEFAULT_PRODUCTS); }
+      try {
+        setProducts(JSON.parse(savedProducts));
+      } catch (e) {
+        setProducts(DEFAULT_PRODUCTS);
+      }
     } else {
       setProducts(DEFAULT_PRODUCTS);
     }
 
     const savedCustomers = localStorage.getItem('forte_customers');
     if (savedCustomers) {
-      try { setCustomers(JSON.parse(savedCustomers)); } catch (e) { setCustomers([]); }
+      try {
+        setCustomers(JSON.parse(savedCustomers));
+      } catch (e) {
+        setCustomers([]);
+      }
     }
   }, []);
 
@@ -128,7 +135,7 @@ export default function CashierPage() {
   const total = subtotal + vat;
   const tenderedNum = parseFloat(amountTendered) || 0;
   const changeDue = paymentMethod === 'CASH' ? Math.max(0, tenderedNum - total) : 0;
-  const pointsEarned = Math.floor(total / 10); // 1 point per R10
+  const pointsEarned = Math.floor(total / 10);
 
   const handleQuickRegister = (e: React.FormEvent) => {
     e.preventDefault();
@@ -138,7 +145,7 @@ export default function CashierPage() {
       id: Date.now().toString(),
       name: newCustName,
       phone: newCustPhone,
-      points: 50, // Welcome bonus
+      points: 50,
       totalSpent: 0,
       lastVisit: new Date().toISOString().split('T')[0],
     };
@@ -160,7 +167,6 @@ export default function CashierPage() {
       return;
     }
 
-    // Deduct stock
     const updatedProducts = products.map((prod) => {
       const cartItem = cart.find((c) => c.id === prod.id);
       if (cartItem) {
@@ -172,7 +178,6 @@ export default function CashierPage() {
     setProducts(updatedProducts);
     localStorage.setItem('forte_inventory_items', JSON.stringify(updatedProducts));
 
-    // Update Customer Points & History if customer attached
     if (selectedCustomer) {
       const updatedCustomers = customers.map((c) => {
         if (c.id === selectedCustomer.id) {
@@ -269,7 +274,7 @@ export default function CashierPage() {
         </div>
       </div>
 
-      {/* Cart & Customer Loyalty Panel */}
+      {/* Cart & Checkout Panel */}
       <div className="bg-slate-950 border border-slate-800 rounded-3xl p-5 flex flex-col justify-between h-fit lg:min-h-[calc(100vh-3rem)]">
         <div className="space-y-4">
           <div className="flex items-center justify-between border-b border-slate-900 pb-3">
@@ -346,7 +351,7 @@ export default function CashierPage() {
           </div>
 
           {/* Cart Items List */}
-          <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+          <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
             {cart.length === 0 ? (
               <p className="text-xs text-slate-500 text-center py-6">Basket is empty.</p>
             ) : (
@@ -380,8 +385,54 @@ export default function CashierPage() {
           </div>
         </div>
 
-        {/* Checkout Summary */}
+        {/* Checkout Summary & Payment Controls */}
         <div className="space-y-3 pt-3 border-t border-slate-900 mt-3">
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setPaymentMethod('CASH')}
+              className={`py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 border transition ${
+                paymentMethod === 'CASH'
+                  ? 'bg-emerald-600/20 border-emerald-500 text-emerald-400'
+                  : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+              }`}
+            >
+              <Banknote className="w-3.5 h-3.5" /> Cash
+            </button>
+            <button
+              type="button"
+              onClick={() => setPaymentMethod('CARD')}
+              className={`py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 border transition ${
+                paymentMethod === 'CARD'
+                  ? 'bg-blue-600/20 border-blue-500 text-blue-400'
+                  : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+              }`}
+            >
+              <CreditCard className="w-3.5 h-3.5" /> Card / EFTPOS
+            </button>
+          </div>
+
+          {paymentMethod === 'CASH' && (
+            <div className="bg-slate-900/60 p-2.5 rounded-2xl border border-slate-800 space-y-1.5">
+              <div className="flex justify-between items-center text-[11px]">
+                <label className="text-slate-400 font-bold">Amount Tendered (ZAR)</label>
+                {tenderedNum >= total && total > 0 && (
+                  <span className="text-emerald-400 font-mono font-bold">
+                    Change: R {changeDue.toFixed(2)}
+                  </span>
+                )}
+              </div>
+              <input
+                type="number"
+                step="0.01"
+                placeholder={`e.g. ${Math.ceil(total)}`}
+                value={amountTendered}
+                onChange={(e) => setAmountTendered(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white font-mono font-bold text-sm focus:outline-none focus:border-emerald-500"
+              />
+            </div>
+          )}
+
           <div className="space-y-1 text-xs font-mono text-slate-400">
             <div className="flex justify-between">
               <span>Subtotal:</span>
@@ -405,7 +456,10 @@ export default function CashierPage() {
 
           <button
             onClick={handleCheckout}
-            disabled={cart.length === 0}
+            disabled={
+              cart.length === 0 ||
+              (paymentMethod === 'CASH' && (!amountTendered || tenderedNum < total))
+            }
             className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-800 disabled:text-slate-600 text-white py-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition"
           >
             <CheckCircle className="w-4 h-4" /> Complete Sale & Issue Receipt
@@ -478,7 +532,9 @@ export default function CashierPage() {
             <div className="border-t border-b border-dashed border-gray-400 py-3 space-y-2">
               {completedSale.items.map((item) => (
                 <div key={item.id} className="flex justify-between text-xs">
-                  <span>{item.name} (x{item.quantity})</span>
+                  <span>
+                    {item.name} (x{item.quantity})
+                  </span>
                   <span className="font-bold">R {(item.price * item.quantity).toFixed(2)}</span>
                 </div>
               ))}
