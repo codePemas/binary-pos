@@ -14,6 +14,10 @@ import {
   Award,
   UserPlus,
   UserCheck,
+  Lock,
+  FileText,
+  CheckCircle2,
+  Clock,
 } from 'lucide-react';
 
 interface Product {
@@ -52,6 +56,20 @@ interface CompletedSale {
   pointsEarned: number;
 }
 
+interface ShiftSession {
+  id: string;
+  cashierName: string;
+  startTime: string;
+  endTime?: string;
+  openingFloat: number;
+  cashSales: number;
+  cardSales: number;
+  expectedCash: number;
+  actualCashCounted?: number;
+  variance?: number;
+  status: 'OPEN' | 'CLOSED';
+}
+
 const DEFAULT_PRODUCTS: Product[] = [
   { id: '1', sku: '2001', name: 'Fresh Milk 2L', category: 'Dairy', price: 34.99, stock: 45 },
   { id: '2', sku: '2002', name: 'White Bread 700g', category: 'Bakery', price: 18.50, stock: 60 },
@@ -69,13 +87,28 @@ export default function CashierPage() {
   const [amountTendered, setAmountTendered] = useState<string>('');
   const [completedSale, setCompletedSale] = useState<CompletedSale | null>(null);
 
-  // Customer Loyalty
+  // Customer Loyalty State
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [customerSearch, setCustomerSearch] = useState('');
   const [isQuickRegisterOpen, setIsQuickRegisterOpen] = useState(false);
   const [newCustName, setNewCustName] = useState('');
   const [newCustPhone, setNewCustPhone] = useState('');
+
+  // Shift & Till State
+  const [currentShift, setCurrentShift] = useState<ShiftSession>({
+    id: 'SHIFT-101',
+    cashierName: 'Lindiwe Mthembu',
+    startTime: new Date().toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' }),
+    openingFloat: 500.0,
+    cashSales: 0.0,
+    cardSales: 0.0,
+    expectedCash: 500.0,
+    status: 'OPEN',
+  });
+  const [isShiftModalOpen, setIsShiftModalOpen] = useState(false);
+  const [actualCash, setActualCash] = useState<string>('');
+  const [isShiftClosed, setIsShiftClosed] = useState(false);
 
   useEffect(() => {
     const savedProducts = localStorage.getItem('forte_inventory_items');
@@ -96,6 +129,13 @@ export default function CashierPage() {
       } catch (e) {
         setCustomers([]);
       }
+    }
+
+    const savedShift = localStorage.getItem('forte_active_shift');
+    if (savedShift) {
+      try {
+        setCurrentShift(JSON.parse(savedShift));
+      } catch (e) {}
     }
   }, []);
 
@@ -167,6 +207,7 @@ export default function CashierPage() {
       return;
     }
 
+    // Deduct stock from Inventory
     const updatedProducts = products.map((prod) => {
       const cartItem = cart.find((c) => c.id === prod.id);
       if (cartItem) {
@@ -178,6 +219,18 @@ export default function CashierPage() {
     setProducts(updatedProducts);
     localStorage.setItem('forte_inventory_items', JSON.stringify(updatedProducts));
 
+    // Update Shift Register Totals
+    const updatedShift: ShiftSession = {
+      ...currentShift,
+      cashSales: paymentMethod === 'CASH' ? currentShift.cashSales + total : currentShift.cashSales,
+      cardSales: paymentMethod === 'CARD' ? currentShift.cardSales + total : currentShift.cardSales,
+      expectedCash:
+        paymentMethod === 'CASH' ? currentShift.expectedCash + total : currentShift.expectedCash,
+    };
+    setCurrentShift(updatedShift);
+    localStorage.setItem('forte_active_shift', JSON.stringify(updatedShift));
+
+    // Update Customer Loyalty Points
     if (selectedCustomer) {
       const updatedCustomers = customers.map((c) => {
         if (c.id === selectedCustomer.id) {
@@ -214,6 +267,27 @@ export default function CashierPage() {
     setAmountTendered('');
   };
 
+  const cashCounted = parseFloat(actualCash) || 0;
+  const variance = cashCounted - currentShift.expectedCash;
+
+  const handleCloseShift = (e: React.FormEvent) => {
+    e.preventDefault();
+
+    const closedSession: ShiftSession = {
+      ...currentShift,
+      endTime: new Date().toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' }),
+      actualCashCounted: cashCounted,
+      variance,
+      status: 'CLOSED',
+    };
+
+    const existingShifts = JSON.parse(localStorage.getItem('forte_shifts') || '[]');
+    localStorage.setItem('forte_shifts', JSON.stringify([closedSession, ...existingShifts]));
+    localStorage.removeItem('forte_active_shift');
+
+    setIsShiftClosed(true);
+  };
+
   const filteredCustomers = customers.filter(
     (c) =>
       c.name.toLowerCase().includes(customerSearch.toLowerCase()) ||
@@ -229,8 +303,36 @@ export default function CashierPage() {
 
   return (
     <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-6 p-4 md:p-6">
-      {/* Product Catalog */}
+      {/* Product Catalog Column */}
       <div className="lg:col-span-2 space-y-4">
+        {/* Top Shift & Header Banner */}
+        <div className="flex items-center justify-between bg-slate-950 p-4 rounded-3xl border border-slate-800">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-blue-600/20 text-blue-400 rounded-2xl border border-blue-500/30">
+              <Clock className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-white flex items-center gap-2">
+                Shift: {currentShift.id}
+                <span className="text-[10px] bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/20 font-mono">
+                  {currentShift.status}
+                </span>
+              </p>
+              <p className="text-[11px] text-slate-400">
+                Cashier: <span className="text-slate-200">{currentShift.cashierName}</span> (Started {currentShift.startTime})
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={() => setIsShiftModalOpen(true)}
+            className="bg-amber-600/20 hover:bg-amber-600/30 border border-amber-500/30 text-amber-400 px-3 py-2 rounded-2xl text-xs font-bold flex items-center gap-1.5 transition"
+          >
+            <Lock className="w-3.5 h-3.5" /> End Shift & Z-Report
+          </button>
+        </div>
+
+        {/* Search Bar */}
         <div className="flex items-center gap-3 bg-slate-950 p-4 rounded-3xl border border-slate-800">
           <Search className="w-4 h-4 text-slate-400" />
           <input
@@ -242,6 +344,7 @@ export default function CashierPage() {
           />
         </div>
 
+        {/* Products Grid */}
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {filteredProducts.map((p) => (
             <button
@@ -274,7 +377,7 @@ export default function CashierPage() {
         </div>
       </div>
 
-      {/* Cart & Checkout Panel */}
+      {/* Cart & Payment Panel */}
       <div className="bg-slate-950 border border-slate-800 rounded-3xl p-5 flex flex-col justify-between h-fit lg:min-h-[calc(100vh-3rem)]">
         <div className="space-y-4">
           <div className="flex items-center justify-between border-b border-slate-900 pb-3">
@@ -284,7 +387,7 @@ export default function CashierPage() {
             <span className="text-xs font-mono text-slate-400">{cart.length} items</span>
           </div>
 
-          {/* Customer Selection Section */}
+          {/* Customer Loyalty Widget */}
           <div className="bg-slate-900/80 p-3 rounded-2xl border border-slate-800 space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-bold uppercase text-slate-400 flex items-center gap-1">
@@ -512,7 +615,121 @@ export default function CashierPage() {
         </div>
       )}
 
-      {/* Printable Receipt Modal */}
+      {/* End Shift & Z-Report Modal */}
+      {isShiftModalOpen && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-950 border border-slate-800 p-6 rounded-3xl w-full max-w-md space-y-4 font-sans">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-amber-500/20 text-amber-400 rounded-2xl border border-amber-500/30">
+                <Lock className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-white">End Shift & Drawer Reconciliation</h3>
+                <p className="text-[11px] text-slate-400">Cashier: {currentShift.cashierName}</p>
+              </div>
+            </div>
+
+            {!isShiftClosed ? (
+              <form onSubmit={handleCloseShift} className="space-y-3 text-xs">
+                <div className="bg-slate-900/80 p-3 rounded-2xl border border-slate-800 space-y-2 font-mono">
+                  <div className="flex justify-between text-slate-400">
+                    <span>Opening Float:</span>
+                    <span>R {currentShift.openingFloat.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-slate-400">
+                    <span>Cash Sales Recorded:</span>
+                    <span>R {currentShift.cashSales.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-slate-400">
+                    <span>Card / EFTPOS Sales:</span>
+                    <span>R {currentShift.cardSales.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-white font-bold text-sm pt-2 border-t border-slate-800">
+                    <span>Expected Cash in Till:</span>
+                    <span className="text-emerald-400">R {currentShift.expectedCash.toFixed(2)}</span>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-slate-400 font-bold">Actual Cash Counted (ZAR)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    required
+                    placeholder="0.00"
+                    value={actualCash}
+                    onChange={(e) => setActualCash(e.target.value)}
+                    className="w-full mt-1 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white font-mono text-sm focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+
+                {actualCash && (
+                  <div
+                    className={`p-2.5 rounded-xl border font-mono text-xs flex justify-between items-center ${
+                      variance === 0
+                        ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                        : variance < 0
+                        ? 'bg-red-500/10 border-red-500/20 text-red-400'
+                        : 'bg-blue-500/10 border-blue-500/20 text-blue-400'
+                    }`}
+                  >
+                    <span>Variance (Shortage / Excess):</span>
+                    <span className="font-bold">R {variance.toFixed(2)}</span>
+                  </div>
+                )}
+
+                <div className="flex gap-2 pt-2">
+                  <button
+                    type="submit"
+                    className="flex-1 bg-amber-600 hover:bg-amber-500 text-white py-2.5 rounded-xl font-bold transition"
+                  >
+                    Reconcile & Close Shift
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsShiftModalOpen(false)}
+                    className="px-4 bg-slate-900 text-slate-400 rounded-xl font-bold"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <div className="text-center space-y-3 py-2 font-mono">
+                <CheckCircle2 className="w-10 h-10 text-emerald-400 mx-auto" />
+                <p className="text-xs text-white font-bold">Shift Closed & Z-Report Generated!</p>
+                <div className="text-left bg-slate-900 p-3 rounded-xl space-y-1 text-[11px] text-slate-300">
+                  <p>Shift ID: {currentShift.id}</p>
+                  <p>Cashier: {currentShift.cashierName}</p>
+                  <p>Expected: R {currentShift.expectedCash.toFixed(2)}</p>
+                  <p>Counted: R {cashCounted.toFixed(2)}</p>
+                  <p className="font-bold text-amber-400">Variance: R {variance.toFixed(2)}</p>
+                </div>
+                <div className="flex gap-2 pt-2">
+                  <button
+                    onClick={() => window.print()}
+                    className="flex-1 bg-blue-600 text-white py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2"
+                  >
+                    <FileText className="w-4 h-4" /> Print Z-Report
+                  </button>
+                  <button
+                    onClick={() => {
+                      setIsShiftClosed(false);
+                      setIsShiftModalOpen(false);
+                      setActualCash('');
+                    }}
+                    className="px-4 bg-slate-900 text-slate-400 rounded-xl font-bold text-xs"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Printable Sale Receipt Modal */}
       {completedSale && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white text-black p-6 rounded-2xl w-full max-w-sm space-y-4 font-mono text-xs">
@@ -524,6 +741,7 @@ export default function CashierPage() {
             <div className="text-[10px] text-gray-600 space-y-0.5">
               <p>Receipt #: {completedSale.receiptNo}</p>
               <p>Date: {completedSale.date}</p>
+              <p>Payment: {completedSale.paymentMethod}</p>
               {completedSale.customer && (
                 <p className="font-bold text-black">Customer: {completedSale.customer.name}</p>
               )}
@@ -541,15 +759,29 @@ export default function CashierPage() {
             </div>
 
             <div className="space-y-1 text-xs">
-              <div className="flex justify-between font-extrabold text-sm pt-1">
+              <div className="flex justify-between">
+                <span>Subtotal:</span>
+                <span>R {completedSale.subtotal.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>VAT (15%):</span>
+                <span>R {completedSale.vat.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between font-extrabold text-sm pt-1 border-t border-gray-200">
                 <span>TOTAL:</span>
                 <span>R {completedSale.total.toFixed(2)}</span>
               </div>
-              {completedSale.customer && (
-                <div className="flex justify-between text-[10px] text-gray-700 pt-1 font-bold">
-                  <span>Points Earned This Sale:</span>
-                  <span>+{completedSale.pointsEarned} pts</span>
-                </div>
+              {completedSale.paymentMethod === 'CASH' && (
+                <>
+                  <div className="flex justify-between text-[11px] pt-1">
+                    <span>Tendered:</span>
+                    <span>R {completedSale.amountTendered.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-[11px]">
+                    <span>Change:</span>
+                    <span>R {completedSale.changeDue.toFixed(2)}</span>
+                  </div>
+                </>
               )}
             </div>
 
