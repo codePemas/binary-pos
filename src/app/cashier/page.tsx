@@ -1,10 +1,23 @@
 'use client';
 
 import { useState } from 'react';
+import {
+  Search,
+  ShoppingCart,
+  Trash2,
+  Plus,
+  Minus,
+  CreditCard,
+  Banknote,
+  Printer,
+  CheckCircle2,
+  X,
+  Receipt,
+} from 'lucide-react';
 
 interface Product {
   id: string;
-  barcode: string;
+  sku: string;
   name: string;
   category: string;
   price: number;
@@ -15,47 +28,54 @@ interface CartItem extends Product {
   quantity: number;
 }
 
+interface TransactionReceipt {
+  id: string;
+  timestamp: string;
+  items: CartItem[];
+  subtotal: number;
+  vat: number;
+  total: number;
+  paymentMethod: 'CASH' | 'CARD';
+  amountTendered: number;
+  changeDue: number;
+  cashierId: string;
+}
+
 const INITIAL_PRODUCTS: Product[] = [
-  { id: '1', barcode: '6001234567890', name: 'Forte Whole Milk 2L', category: 'Dairy', price: 32.99, stock: 45 },
-  { id: '2', barcode: '6001234567891', name: 'White Bread 700g', category: 'Bakery', price: 16.50, stock: 8 },
-  { id: '3', barcode: '6001234567892', name: 'Cheddar Cheese 500g', category: 'Dairy', price: 64.90, stock: 18 },
-  { id: '4', barcode: '6001234567893', name: 'Sunflower Oil 2L', category: 'Pantry', price: 69.99, stock: 30 },
-  { id: '5', barcode: '6001234567894', name: 'Maize Meal 5kg', category: 'Pantry', price: 59.99, stock: 4 },
+  { id: '1', sku: '2001', name: 'Fresh Milk 2L', category: 'Dairy', price: 34.99, stock: 45 },
+  { id: '2', sku: '2002', name: 'White Bread 700g', category: 'Bakery', price: 18.50, stock: 60 },
+  { id: '3', sku: '2003', name: 'Cheddar Cheese 500g', category: 'Dairy', price: 62.00, stock: 22 },
+  { id: '4', sku: '2004', name: 'Instant Coffee 200g', category: 'Pantry', price: 89.99, stock: 18 },
+  { id: '5', sku: '2005', name: 'White Rice 2kg', category: 'Pantry', price: 42.50, stock: 35 },
+  { id: '6', sku: '2006', name: 'Sunflower Oil 2L', category: 'Pantry', price: 69.99, stock: 12 },
+  { id: '7', sku: '2007', name: 'Eggs 30-Pack', category: 'Dairy', price: 74.99, stock: 15 },
+  { id: '8', sku: '2008', name: 'Bananas 1kg', category: 'Produce', price: 21.99, stock: 40 },
 ];
 
 export default function CashierPage() {
-  const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS);
+  const [products] = useState<Product[]>(INITIAL_PRODUCTS);
   const [cart, setCart] = useState<CartItem[]>([]);
-  const [search, setSearch] = useState('');
-  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
-  const [paymentType, setPaymentType] = useState<'CASH' | 'CARD'>('CASH');
-  const [cashAmount, setCashAmount] = useState('');
-  const [receipt, setReceipt] = useState<any | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'CARD'>('CASH');
+  const [cashTendered, setCashTendered] = useState<string>('');
+  const [completedReceipt, setCompletedReceipt] = useState<TransactionReceipt | null>(null);
 
+  // Cart helper actions
   const addToCart = (product: Product) => {
-    if (product.stock <= 0) {
-      alert(`Out of stock: ${product.name}`);
-      return;
-    }
-
-    setCart((prev) => {
-      const existing = prev.find((item) => item.id === product.id);
+    setCart((prevCart) => {
+      const existing = prevCart.find((item) => item.id === product.id);
       if (existing) {
-        if (existing.quantity >= product.stock) {
-          alert(`Limit reached. Only ${product.stock} units available.`);
-          return prev;
-        }
-        return prev.map((item) =>
+        return prevCart.map((item) =>
           item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
         );
       }
-      return [...prev, { ...product, quantity: 1 }];
+      return [...prevCart, { ...product, quantity: 1 }];
     });
   };
 
   const updateQuantity = (id: string, delta: number) => {
-    setCart((prev) =>
-      prev
+    setCart((prevCart) =>
+      prevCart
         .map((item) => {
           if (item.id === id) {
             const newQty = item.quantity + delta;
@@ -68,129 +88,166 @@ export default function CashierPage() {
   };
 
   const removeFromCart = (id: string) => {
-    setCart((prev) => prev.filter((item) => item.id !== id));
+    setCart((prevCart) => prevCart.filter((item) => item.id !== id));
   };
 
-  const handleBarcodeSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const found = products.find(
-      (p) => p.barcode === search.trim() || p.name.toLowerCase().includes(search.toLowerCase())
-    );
-    if (found) {
-      addToCart(found);
-      setSearch('');
-    } else {
-      alert('Product not found in Forte Supermarket inventory.');
-    }
-  };
+  const clearCart = () => setCart([]);
 
-  const subtotal = cart.reduce((acc, item) => acc + item.price * item.quantity, 0);
+  // Financial calculations (15% SA VAT)
+  const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const vat = subtotal * 0.15;
   const total = subtotal;
-  const tendered = parseFloat(cashAmount) || 0;
-  const change = tendered - total;
 
-  const handleCompleteSale = () => {
-    if (paymentType === 'CASH' && tendered < total) {
-      alert('Tendered cash is insufficient!');
-      return;
-    }
+  const tenderedAmount = paymentMethod === 'CARD' ? total : parseFloat(cashTendered) || 0;
+  const changeDue = Math.max(0, tenderedAmount - total);
+  const canCheckout = cart.length > 0 && (paymentMethod === 'CARD' || tenderedAmount >= total);
 
-    setProducts((prev) =>
-      prev.map((p) => {
-        const item = cart.find((c) => c.id === p.id);
-        return item ? { ...p, stock: p.stock - item.quantity } : p;
-      })
-    );
+  // Process checkout & generate receipt
+  const handleCheckout = () => {
+    if (!canCheckout) return;
 
-    setReceipt({
-      id: `INV-${Date.now().toString().slice(-6)}`,
-      timestamp: new Date().toLocaleString(),
+    const receipt: TransactionReceipt = {
+      id: `FT-${Math.floor(100000 + Math.random() * 900000)}`,
+      timestamp: new Date().toLocaleString('en-ZA', { dateStyle: 'medium', timeStyle: 'short' }),
       items: [...cart],
-      total,
+      subtotal: subtotal - vat,
       vat,
-      paymentType,
-      tendered: paymentType === 'CASH' ? tendered : total,
-      change: paymentType === 'CASH' ? Math.max(0, change) : 0,
-    });
+      total,
+      paymentMethod,
+      amountTendered: tenderedAmount,
+      changeDue,
+      cashierId: '#4092',
+    };
 
+    setCompletedReceipt(receipt);
     setCart([]);
-    setCashAmount('');
-    setPaymentModalOpen(false);
+    setCashTendered('');
   };
 
-  return (
-    <div className="flex h-screen bg-slate-900 text-slate-100 font-sans">
-      {/* Left Area: Product Catalogue */}
-      <div className="w-7/12 p-6 flex flex-col border-r border-slate-800">
-        <header className="flex justify-between items-center mb-6">
-          <div>
-            <h1 className="text-2xl font-black tracking-wide text-blue-400">BINARY/Forte POS</h1>
-            <p className="text-xs text-slate-400">Terminal 01 • Active Cashier</p>
-          </div>
-          <span className="bg-emerald-500/10 text-emerald-400 px-3 py-1 rounded-full text-xs font-semibold border border-emerald-500/20">
-            Online
-          </span>
-        </header>
+  const filteredProducts = products.filter(
+    (p) =>
+      p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      p.sku.includes(searchQuery) ||
+      p.category.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
-        <form onSubmit={handleBarcodeSubmit} className="mb-6">
+  return (
+    <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 p-6">
+      {/* Left Area: Product Search & Grid */}
+      <div className="lg:col-span-7 flex flex-col space-y-4">
+        <div className="flex items-center gap-3 bg-slate-950 p-3 rounded-2xl border border-slate-800">
+          <Search className="w-5 h-5 text-slate-400 ml-2" />
           <input
             type="text"
-            placeholder="Scan barcode or type item name..."
-            className="w-full bg-slate-800 text-white placeholder-slate-500 p-4 rounded-xl border border-slate-700 text-lg focus:outline-none focus:border-blue-500"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            autoFocus
+            placeholder="Search items by name, category, or SKU..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full bg-transparent text-white focus:outline-none text-sm placeholder-slate-500"
           />
-        </form>
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded-lg"
+            >
+              Clear
+            </button>
+          )}
+        </div>
 
-        <div className="grid grid-cols-3 gap-4 overflow-y-auto pr-2 flex-1">
-          {products
-            .filter((p) => p.name.toLowerCase().includes(search.toLowerCase()) || p.barcode.includes(search))
-            .map((product) => (
-              <button
-                key={product.id}
-                onClick={() => addToCart(product)}
-                className="bg-slate-800 hover:bg-slate-700 border border-slate-700 p-4 rounded-xl text-left flex flex-col justify-between transition-all"
-              >
-                <div>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase">{product.category}</span>
-                  <h3 className="font-semibold text-slate-200">{product.name}</h3>
-                  <p className="text-xs text-slate-500 mt-1">BC: {product.barcode}</p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 overflow-y-auto max-h-[calc(100vh-180px)] pr-1">
+          {filteredProducts.map((product) => (
+            <button
+              key={product.id}
+              onClick={() => addToCart(product)}
+              className="flex flex-col justify-between bg-slate-950 hover:bg-slate-800/80 p-4 rounded-2xl border border-slate-800 transition text-left group"
+            >
+              <div>
+                <div className="flex items-center justify-between text-[10px] text-slate-500 font-mono mb-1">
+                  <span>SKU: {product.sku}</span>
+                  <span className="text-blue-400 font-semibold">{product.category}</span>
                 </div>
-                <div className="mt-4 flex justify-between items-end">
-                  <span className="text-lg font-bold text-emerald-400">R{product.price.toFixed(2)}</span>
-                  <span className={`text-xs px-2 py-0.5 rounded font-medium ${product.stock < 10 ? 'bg-red-500/20 text-red-400' : 'bg-slate-700 text-slate-300'}`}>
-                    Stock: {product.stock}
-                  </span>
-                </div>
-              </button>
-            ))}
+                <h4 className="font-semibold text-slate-100 text-sm group-hover:text-blue-400 transition">
+                  {product.name}
+                </h4>
+              </div>
+              <div className="flex items-center justify-between mt-4 pt-2 border-t border-slate-900">
+                <span className="text-xs text-slate-400">Stock: {product.stock}</span>
+                <span className="text-base font-bold text-emerald-400">
+                  R {product.price.toFixed(2)}
+                </span>
+              </div>
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* Right Area: Transaction Cart */}
-      <div className="w-5/12 bg-slate-850 p-6 flex flex-col justify-between border-l border-slate-800">
-        <div>
-          <h2 className="text-xl font-bold text-slate-200 mb-4 pb-2 border-b border-slate-800">Active Cart</h2>
-          <div className="max-h-[55vh] overflow-y-auto space-y-2 pr-1">
+      {/* Right Area: Cart & Checkout Panel */}
+      <div className="lg:col-span-5 flex flex-col bg-slate-950 border border-slate-800 rounded-3xl p-5 justify-between">
+        <div className="space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+            <div className="flex items-center gap-2">
+              <ShoppingCart className="w-5 h-5 text-blue-400" />
+              <h3 className="font-bold text-slate-100">Active Checkout Cart</h3>
+            </div>
+            {cart.length > 0 && (
+              <button
+                onClick={clearCart}
+                className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1 bg-red-500/10 px-2.5 py-1 rounded-lg border border-red-500/20"
+              >
+                <Trash2 className="w-3.5 h-3.5" /> Clear Cart
+              </button>
+            )}
+          </div>
+
+          {/* Cart Items List */}
+          <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
             {cart.length === 0 ? (
-              <div className="text-center py-20 text-slate-500">
-                <p className="text-lg font-medium">Cart is empty</p>
-                <p className="text-xs mt-1">Scan or select items to start</p>
+              <div className="text-center py-12 text-slate-500 text-sm">
+                <Receipt className="w-10 h-10 mx-auto mb-2 opacity-30" />
+                Cart is empty. Tap products to add to basket.
               </div>
             ) : (
               cart.map((item) => (
-                <div key={item.id} className="bg-slate-800 p-3 rounded-lg border border-slate-700 flex justify-between items-center">
+                <div
+                  key={item.id}
+                  className="flex items-center justify-between bg-slate-900/80 p-3 rounded-xl border border-slate-800/80 text-xs"
+                >
                   <div className="flex-1 pr-2">
-                    <p className="font-medium text-slate-200 text-sm">{item.name}</p>
-                    <p className="text-xs text-emerald-400 font-semibold">R{item.price.toFixed(2)}</p>
+                    <p className="font-semibold text-slate-200">{item.name}</p>
+                    <p className="text-slate-400 font-mono text-[10px]">
+                      R {item.price.toFixed(2)} each
+                    </p>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <button onClick={() => updateQuantity(item.id, -1)} className="w-7 h-7 bg-slate-700 rounded font-bold">-</button>
-                    <span className="w-6 text-center text-sm font-semibold">{item.quantity}</span>
-                    <button onClick={() => updateQuantity(item.id, 1)} className="w-7 h-7 bg-slate-700 rounded font-bold">+</button>
-                    <button onClick={() => removeFromCart(item.id)} className="text-red-400 text-xs font-semibold ml-2">Remove</button>
+
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center bg-slate-950 border border-slate-800 rounded-lg">
+                      <button
+                        onClick={() => updateQuantity(item.id, -1)}
+                        className="p-1 hover:bg-slate-800 text-slate-300 rounded-l-lg"
+                      >
+                        <Minus className="w-3 h-3" />
+                      </button>
+                      <span className="px-2 font-mono font-bold text-white text-xs">
+                        {item.quantity}
+                      </span>
+                      <button
+                        onClick={() => updateQuantity(item.id, 1)}
+                        className="p-1 hover:bg-slate-800 text-slate-300 rounded-r-lg"
+                      >
+                        <Plus className="w-3 h-3" />
+                      </button>
+                    </div>
+
+                    <span className="font-bold text-emerald-400 w-16 text-right font-mono">
+                      R {(item.price * item.quantity).toFixed(2)}
+                    </span>
+
+                    <button
+                      onClick={() => removeFromCart(item.id)}
+                      className="text-slate-500 hover:text-red-400 p-1"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 </div>
               ))
@@ -198,118 +255,189 @@ export default function CashierPage() {
           </div>
         </div>
 
-        <div className="bg-slate-800 p-5 rounded-2xl border border-slate-700 space-y-3">
-          <div className="flex justify-between text-slate-400 text-sm">
-            <span>VAT (15%)</span>
-            <span>R{vat.toFixed(2)}</span>
+        {/* Payment Summary & Action */}
+        <div className="pt-4 border-t border-slate-800 space-y-4">
+          <div className="space-y-1.5 text-xs text-slate-400">
+            <div className="flex justify-between">
+              <span>Subtotal (Excl. VAT)</span>
+              <span className="font-mono font-semibold text-slate-300">
+                R {(subtotal - vat).toFixed(2)}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span>VAT (15%)</span>
+              <span className="font-mono font-semibold text-slate-300">
+                R {vat.toFixed(2)}
+              </span>
+            </div>
+            <div className="flex justify-between text-base font-bold text-white pt-2 border-t border-slate-800/80">
+              <span>Total Amount Due</span>
+              <span className="font-mono text-emerald-400">R {total.toFixed(2)}</span>
+            </div>
           </div>
-          <div className="flex justify-between text-3xl font-black text-white pt-2 border-t border-slate-700">
-            <span>Total</span>
-            <span className="text-emerald-400">R{total.toFixed(2)}</span>
+
+          {/* Payment Method Selector */}
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => setPaymentMethod('CASH')}
+              className={`flex items-center justify-center gap-2 py-2.5 rounded-xl border text-xs font-semibold transition ${
+                paymentMethod === 'CASH'
+                  ? 'bg-blue-600/20 text-blue-400 border-blue-500'
+                  : 'bg-slate-900 text-slate-400 border-slate-800 hover:bg-slate-800'
+              }`}
+            >
+              <Banknote className="w-4 h-4" /> Cash Payment
+            </button>
+            <button
+              onClick={() => setPaymentMethod('CARD')}
+              className={`flex items-center justify-center gap-2 py-2.5 rounded-xl border text-xs font-semibold transition ${
+                paymentMethod === 'CARD'
+                  ? 'bg-blue-600/20 text-blue-400 border-blue-500'
+                  : 'bg-slate-900 text-slate-400 border-slate-800 hover:bg-slate-800'
+              }`}
+            >
+              <CreditCard className="w-4 h-4" /> Card Terminal
+            </button>
           </div>
+
+          {/* Cash Tendered Input */}
+          {paymentMethod === 'CASH' && (
+            <div className="space-y-1">
+              <label className="text-[10px] text-slate-400 uppercase font-semibold">
+                Cash Tendered (R)
+              </label>
+              <input
+                type="number"
+                placeholder="Enter amount given by customer..."
+                value={cashTendered}
+                onChange={(e) => setCashTendered(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-800 p-2.5 rounded-xl text-white font-mono text-sm focus:outline-none focus:border-blue-500"
+              />
+              {tenderedAmount > 0 && tenderedAmount >= total && (
+                <p className="text-xs text-emerald-400 font-semibold text-right pt-1">
+                  Change Due: R {changeDue.toFixed(2)}
+                </p>
+              )}
+            </div>
+          )}
+
           <button
-            onClick={() => setPaymentModalOpen(true)}
-            disabled={cart.length === 0}
-            className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white py-4 rounded-xl font-bold text-lg mt-2"
+            onClick={handleCheckout}
+            disabled={!canCheckout}
+            className={`w-full py-3.5 rounded-xl font-bold text-sm transition flex items-center justify-center gap-2 ${
+              canCheckout
+                ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-900/30'
+                : 'bg-slate-800 text-slate-500 cursor-not-allowed'
+            }`}
           >
-            Checkout
+            <CheckCircle2 className="w-5 h-5" /> Complete Sale & Print Receipt
           </button>
         </div>
       </div>
 
-      {/* Payment Modal */}
-      {paymentModalOpen && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
-          <div className="bg-slate-800 border border-slate-700 p-6 rounded-2xl w-full max-w-md space-y-6">
-            <h3 className="text-xl font-bold text-white">Payment - R{total.toFixed(2)}</h3>
-            <div className="flex gap-3">
+      {/* Printable Thermal Receipt Modal */}
+      {completedReceipt && (
+        <div className="fixed inset-0 bg-black/85 flex items-center justify-center p-4 z-50">
+          <div className="bg-slate-900 border border-slate-700 rounded-3xl max-w-sm w-full p-6 text-slate-900 space-y-4">
+            {/* Modal Header Controls */}
+            <div className="flex items-center justify-between pb-2 border-b border-slate-800 text-white">
+              <span className="text-xs font-semibold text-emerald-400 flex items-center gap-1.5">
+                <CheckCircle2 className="w-4 h-4" /> Sale Completed
+              </span>
               <button
-                onClick={() => setPaymentType('CASH')}
-                className={`flex-1 py-3 rounded-xl font-bold ${paymentType === 'CASH' ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-300'}`}
+                onClick={() => setCompletedReceipt(null)}
+                className="text-slate-400 hover:text-white p-1"
               >
-                Cash
-              </button>
-              <button
-                onClick={() => setPaymentType('CARD')}
-                className={`flex-1 py-3 rounded-xl font-bold ${paymentType === 'CARD' ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-300'}`}
-              >
-                Card
+                <X className="w-5 h-5" />
               </button>
             </div>
 
-            {paymentType === 'CASH' && (
-              <div className="space-y-2">
-                <label className="text-xs text-slate-400 uppercase font-semibold">Tendered (ZAR)</label>
-                <input
-                  type="number"
-                  className="w-full bg-slate-900 border border-slate-700 p-3 rounded-xl text-2xl font-bold text-white focus:outline-none"
-                  value={cashAmount}
-                  onChange={(e) => setCashAmount(e.target.value)}
-                  autoFocus
-                />
-                {tendered > 0 && (
-                  <div className="flex justify-between text-sm pt-2">
-                    <span className="text-slate-400">Change:</span>
-                    <span className={`font-bold ${change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                      R{change >= 0 ? change.toFixed(2) : 'Insufficient'}
+            {/* Receipt Content Body (Thermal Format) */}
+            <div className="bg-white p-6 rounded-2xl shadow-inner font-mono text-xs text-black space-y-3">
+              <div className="text-center space-y-1 pb-3 border-b border-dashed border-gray-400">
+                <h2 className="font-bold text-base tracking-wider uppercase">
+                  FORTE SUPERMARKET
+                </h2>
+                <p className="text-[10px] text-gray-600">Alice Main Campus, Eastern Cape</p>
+                <p className="text-[10px] text-gray-600">VAT Reg #: 4092001928</p>
+              </div>
+
+              <div className="text-[10px] text-gray-600 space-y-0.5 pb-2 border-b border-dashed border-gray-400">
+                <div className="flex justify-between">
+                  <span>Receipt #:</span>
+                  <span className="font-bold">{completedReceipt.id}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Date/Time:</span>
+                  <span>{completedReceipt.timestamp}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Cashier ID:</span>
+                  <span>{completedReceipt.cashierId}</span>
+                </div>
+              </div>
+
+              {/* Items Line Items */}
+              <div className="space-y-1 py-1 border-b border-dashed border-gray-400 text-[11px]">
+                {completedReceipt.items.map((item) => (
+                  <div key={item.id} className="flex justify-between">
+                    <span className="truncate pr-2">
+                      {item.quantity}x {item.name}
                     </span>
+                    <span className="font-bold">
+                      {(item.price * item.quantity).toFixed(2)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Financial Totals */}
+              <div className="space-y-1 text-[11px] pt-1">
+                <div className="flex justify-between text-gray-600">
+                  <span>Subtotal Excl. VAT:</span>
+                  <span>R {completedReceipt.subtotal.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-gray-600">
+                  <span>VAT (15%):</span>
+                  <span>R {completedReceipt.vat.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between font-bold text-sm pt-1 text-black border-t border-black">
+                  <span>TOTAL PAID:</span>
+                  <span>R {completedReceipt.total.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-[10px] text-gray-600 pt-1">
+                  <span>Method: {completedReceipt.paymentMethod}</span>
+                  <span>Tendered: R {completedReceipt.amountTendered.toFixed(2)}</span>
+                </div>
+                {completedReceipt.paymentMethod === 'CASH' && (
+                  <div className="flex justify-between text-[10px] font-bold text-gray-800">
+                    <span>Change:</span>
+                    <span>R {completedReceipt.changeDue.toFixed(2)}</span>
                   </div>
                 )}
               </div>
-            )}
 
-            <div className="flex gap-3 pt-4 border-t border-slate-700">
-              <button onClick={() => setPaymentModalOpen(false)} className="flex-1 py-3 bg-slate-700 text-slate-300 rounded-xl font-semibold">
-                Cancel
+              <div className="text-center pt-3 border-t border-dashed border-gray-400 text-[9px] text-gray-500">
+                <p>Thank you for shopping at Forte!</p>
+                <p>Please retain receipt for returns within 7 days.</p>
+              </div>
+            </div>
+
+            {/* Print Action Buttons */}
+            <div className="flex gap-2">
+              <button
+                onClick={() => window.print()}
+                className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 transition"
+              >
+                <Printer className="w-4 h-4" /> Print / Save PDF
               </button>
-              <button onClick={handleCompleteSale} className="flex-1 py-3 bg-emerald-600 text-white rounded-xl font-bold">
-                Finalize
+              <button
+                onClick={() => setCompletedReceipt(null)}
+                className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold px-4 py-2.5 rounded-xl text-xs transition"
+              >
+                Close
               </button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Digital Receipt Overlay */}
-      {receipt && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
-          <div className="bg-white text-slate-900 p-6 rounded-2xl w-full max-w-sm font-mono text-xs space-y-4">
-            <div className="text-center border-b pb-3 border-slate-200">
-              <h2 className="text-base font-bold uppercase">Forte Supermarket</h2>
-              <p>Receipt: #{receipt.id}</p>
-              <p className="text-[10px] text-slate-500">{receipt.timestamp}</p>
-            </div>
-
-            <div className="space-y-1.5 border-b pb-3 border-slate-200">
-              {receipt.items.map((item: any) => (
-                <div key={item.id} className="flex justify-between">
-                  <span>{item.quantity}x {item.name.slice(0, 18)}</span>
-                  <span>R{(item.price * item.quantity).toFixed(2)}</span>
-                </div>
-              ))}
-            </div>
-
-            <div className="space-y-1 border-b pb-3 border-slate-200">
-              <div className="flex justify-between font-bold text-sm">
-                <span>TOTAL</span>
-                <span>R{receipt.total.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between text-[10px] text-slate-600">
-                <span>VAT (15%)</span>
-                <span>R{receipt.vat.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between text-[10px] text-slate-600">
-                <span>Method</span>
-                <span>{receipt.paymentType}</span>
-              </div>
-            </div>
-
-            <button
-              onClick={() => setReceipt(null)}
-              className="mt-4 w-full bg-slate-900 text-white py-2 rounded font-sans font-bold"
-            >
-              Close & Next Sale
-            </button>
           </div>
         </div>
       )}
