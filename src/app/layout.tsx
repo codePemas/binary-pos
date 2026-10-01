@@ -8,6 +8,7 @@ import {
   ShoppingCart,
   Package,
   Truck,
+  Users,
   Menu,
   X,
   Store,
@@ -24,6 +25,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     { name: 'POS Terminal', href: '/cashier', icon: ShoppingCart },
     { name: 'Inventory', href: '/inventory', icon: Package },
     { name: 'Suppliers', href: '/suppliers', icon: Truck },
+    { name: 'Staff & Shifts', href: '/staff', icon: Users },
   ];
 
   return (
