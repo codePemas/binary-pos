@@ -1,243 +1,342 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import {
-  Package,
-  AlertTriangle,
-  FilePlus,
-  Search,
-  ArrowUpRight,
-  CheckCircle2,
-  X,
-} from 'lucide-react';
-import Link from 'next/link';
-
-interface InventoryItem {
-  id: string;
-  sku: string;
-  name: string;
-  category: string;
-  price: number;
-  costPrice: number;
-  stock: number;
-  minThreshold: number;
-  supplier: string;
-}
-
-const INITIAL_INVENTORY: InventoryItem[] = [
-  { id: '1', sku: '2001', name: 'Fresh Milk 2L', category: 'Dairy', price: 34.99, costPrice: 26.50, stock: 45, minThreshold: 20, supplier: 'Clover SA' },
-  { id: '2', sku: '2002', name: 'White Bread 700g', category: 'Bakery', price: 18.50, costPrice: 12.00, stock: 60, minThreshold: 25, supplier: 'Sasko Bakery' },
-  { id: '3', sku: '2003', name: 'Cheddar Cheese 500g', category: 'Dairy', price: 62.00, costPrice: 48.00, stock: 8, minThreshold: 15, supplier: 'Parmalat' },
-  { id: '4', sku: '2004', name: 'Instant Coffee 200g', category: 'Pantry', price: 89.99, costPrice: 65.00, stock: 5, minThreshold: 10, supplier: 'Nestlé Foods' },
-  { id: '5', sku: '2005', name: 'White Rice 2kg', category: 'Pantry', price: 42.50, costPrice: 30.00, stock: 35, minThreshold: 20, supplier: 'Tastic Foods' },
-  { id: '6', sku: '2006', name: 'Sunflower Oil 2L', category: 'Pantry', price: 69.99, costPrice: 52.00, stock: 4, minThreshold: 15, supplier: 'Excella Oil' },
-  { id: '7', sku: '2007', name: 'Eggs 30-Pack', category: 'Dairy', price: 74.99, costPrice: 55.00, stock: 6, minThreshold: 12, supplier: 'Golden Lay' },
-  { id: '8', sku: '2008', name: 'Bananas 1kg', category: 'Produce', price: 21.99, costPrice: 14.00, stock: 40, minThreshold: 15, supplier: 'Subtropico' },
-];
+import React, { useState } from 'react';
+import { useStore, Product } from '@/context/StoreContext';
 
 export default function InventoryPage() {
-  const [inventory, setInventory] = useState<InventoryItem[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
-  const [activeNotification, setActiveNotification] = useState<string | null>(null);
+  const {
+    products,
+    suppliers,
+    updateStock,
+    addProduct,
+    createPurchaseOrder,
+    storeSettings,
+  } = useStore();
 
-  // Load state from localStorage on mount
-  useEffect(() => {
-    const savedInventory = localStorage.getItem('forte_inventory_items');
-    if (savedInventory) {
-      try {
-        setInventory(JSON.parse(savedInventory));
-      } catch (e) {
-        setInventory(INITIAL_INVENTORY);
-        localStorage.setItem('forte_inventory_items', JSON.stringify(INITIAL_INVENTORY));
-      }
-    } else {
-      setInventory(INITIAL_INVENTORY);
-      localStorage.setItem('forte_inventory_items', JSON.stringify(INITIAL_INVENTORY));
-    }
-  }, []);
+  const [filterLowStock, setFilterLowStock] = useState(false);
 
-  const categories = ['ALL', 'Dairy', 'Bakery', 'Pantry', 'Produce'];
+  // New Product Modal State
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newSku, setNewSku] = useState('');
+  const [newName, setNewName] = useState('');
+  const [newCategory, setNewCategory] = useState('General');
+  const [newCost, setNewCost] = useState('');
+  const [newRetail, setNewRetail] = useState('');
+  const [newStock, setNewStock] = useState('');
+  const [newMinStock, setNewMinStock] = useState('10');
+  const [newSupplier, setNewSupplier] = useState('');
 
-  const lowStockItems = inventory.filter((item) => item.stock <= item.minThreshold);
+  // Fast Reorder Modal State
+  const [reorderProduct, setReorderProduct] = useState<Product | null>(null);
+  const [reorderQty, setReorderQty] = useState('50');
 
-  const handleGeneratePO = (item: InventoryItem) => {
-    const restockQty = 50;
-    const newPO = {
-      id: `PO-${Math.floor(1000 + Math.random() * 9000)}`,
-      supplier: item.supplier,
-      sku: item.sku,
-      quantity: restockQty,
-      itemDetails: `${item.name} (x${restockQty})`,
-      totalCost: item.costPrice * restockQty,
-      status: 'PENDING',
-    };
+  const displayedProducts = filterLowStock
+    ? products.filter((p: Product) => p.stock <= p.minStock)
+    : products;
 
-    const existingPOs = JSON.parse(localStorage.getItem('forte_purchase_orders') || '[]');
-    localStorage.setItem('forte_purchase_orders', JSON.stringify([newPO, ...existingPOs]));
+  const handleCreateProduct = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newSku || !newName || !newCost || !newRetail) return;
 
-    setActiveNotification(
-      `Draft Purchase Order for ${item.supplier} (${item.name}) generated! View on the Suppliers page.`
-    );
-    setTimeout(() => setActiveNotification(null), 5000);
+    addProduct({
+      id: `prod-${Date.now()}`,
+      sku: newSku.trim(),
+      name: newName.trim(),
+      category: newCategory.trim(),
+      costPrice: parseFloat(newCost) || 0,
+      retailPrice: parseFloat(newRetail) || 0,
+      stock: parseInt(newStock) || 0,
+      minStock: parseInt(newMinStock) || 10,
+      supplier: newSupplier || (suppliers[0]?.name ?? 'Unassigned'),
+    });
+
+    setShowAddModal(false);
+    setNewSku('');
+    setNewName('');
+    setNewCost('');
+    setNewRetail('');
+    setNewStock('');
   };
 
-  const filteredItems = inventory.filter((item) => {
-    const matchesSearch =
-      item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.sku.includes(searchQuery) ||
-      item.supplier.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = selectedCategory === 'ALL' || item.category === selectedCategory;
-    return matchesSearch && matchesCategory;
-  });
+  const handleQuickReorder = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reorderProduct) return;
+
+    const targetSupplier = reorderProduct.supplier || suppliers[0]?.name || 'General Supplier';
+    const qty = parseInt(reorderQty) || 10;
+    const totalCost = qty * reorderProduct.costPrice;
+
+    createPurchaseOrder({
+      supplierName: targetSupplier,
+      sku: reorderProduct.sku,
+      productName: reorderProduct.name,
+      quantity: qty,
+      totalCost,
+    });
+
+    setReorderProduct(null);
+    alert(`Purchase Order issued to ${targetSupplier} for ${qty}x ${reorderProduct.name}`);
+  };
 
   return (
-    <div className="flex-1 p-6 space-y-6">
-      {activeNotification && (
-        <div className="fixed top-6 right-6 bg-emerald-950 border border-emerald-500 text-emerald-200 px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-3 z-50">
-          <CheckCircle2 className="w-5 h-5 text-emerald-400" />
-          <span className="text-xs font-semibold">{activeNotification}</span>
-          <button onClick={() => setActiveNotification(null)} className="text-emerald-400 hover:text-white">
-            <X className="w-4 h-4" />
+    <div className="p-8 space-y-6 bg-slate-950 text-slate-100 min-h-screen w-full">
+      {/* Header Controls */}
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-2xl font-black tracking-tight text-white">Inventory Management</h1>
+          <p className="text-xs text-slate-400">Track stock levels, configure thresholds, and initiate supplier restocks.</p>
+        </div>
+
+        <div className="flex gap-3">
+          <button
+            onClick={() => setFilterLowStock(!filterLowStock)}
+            className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all ${
+              filterLowStock
+                ? 'bg-amber-500/20 text-amber-400 border-amber-500/40'
+                : 'bg-slate-900 border-slate-800 text-slate-300 hover:bg-slate-800'
+            }`}
+          >
+            {filterLowStock ? 'Showing Low Stock Only' : 'Filter Low Stock'}
           </button>
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all"
+          >
+            + Add New Product
+          </button>
+        </div>
+      </div>
+
+      {/* Inventory Table */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+        <table className="w-full text-left text-xs text-slate-300">
+          <thead className="bg-slate-950/60 text-slate-400 border-b border-slate-800 uppercase font-mono text-[10px]">
+            <tr>
+              <th className="p-4">SKU</th>
+              <th className="p-4">Product Name</th>
+              <th className="p-4">Category</th>
+              <th className="p-4">Cost Price</th>
+              <th className="p-4">Retail Price</th>
+              <th className="p-4">Current Stock</th>
+              <th className="p-4">Supplier</th>
+              <th className="p-4 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-800/60">
+            {displayedProducts.map((p: Product) => {
+              const isLow = p.stock <= p.minStock;
+              return (
+                <tr key={p.id || p.sku} className="hover:bg-slate-800/30 transition-colors">
+                  <td className="p-4 font-mono font-bold text-slate-400">#{p.sku}</td>
+                  <td className="p-4 font-bold text-white">{p.name}</td>
+                  <td className="p-4">
+                    <span className="bg-slate-800 px-2.5 py-1 rounded-md text-[10px] text-slate-300 font-semibold">
+                      {p.category}
+                    </span>
+                  </td>
+                  <td className="p-4 font-mono text-slate-400">{storeSettings.currency} {p.costPrice.toFixed(2)}</td>
+                  <td className="p-4 font-mono font-bold text-blue-400">{storeSettings.currency} {p.retailPrice.toFixed(2)}</td>
+                  <td className="p-4">
+                    <div className="flex items-center gap-2">
+                      <span className={`font-extrabold font-mono text-sm ${isLow ? 'text-amber-400' : 'text-slate-100'}`}>
+                        {p.stock}
+                      </span>
+                      {isLow && (
+                        <span className="bg-amber-500/10 border border-amber-500/30 text-amber-400 text-[9px] font-black px-1.5 py-0.5 rounded uppercase">
+                          Low Stock
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="p-4 text-slate-400">{p.supplier || 'Unassigned'}</td>
+                  <td className="p-4 text-right space-x-1.5">
+                    <button
+                      onClick={() => updateStock(p.sku, 5)}
+                      className="bg-slate-800 hover:bg-slate-700 text-slate-200 px-2.5 py-1 rounded-lg text-[11px] font-bold"
+                    >
+                      +5
+                    </button>
+                    <button
+                      onClick={() => updateStock(p.sku, 10)}
+                      className="bg-slate-800 hover:bg-slate-700 text-slate-200 px-2.5 py-1 rounded-lg text-[11px] font-bold"
+                    >
+                      +10
+                    </button>
+                    <button
+                      onClick={() => {
+                        setReorderProduct(p);
+                        setReorderQty('50');
+                      }}
+                      className="bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 border border-blue-500/30 px-2.5 py-1 rounded-lg text-[11px] font-bold"
+                    >
+                      Reorder PO
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Add Product Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+          <form onSubmit={handleCreateProduct} className="bg-slate-900 border border-slate-800 p-6 rounded-2xl w-full max-w-md space-y-4 shadow-2xl">
+            <h2 className="text-lg font-bold text-white">Add New Inventory Item</h2>
+
+            <div className="grid grid-cols-2 gap-3 text-xs">
+              <div>
+                <label className="text-[10px] text-slate-400 uppercase font-bold">SKU Code</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="2006"
+                  value={newSku}
+                  onChange={(e) => setNewSku(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 font-mono text-white focus:outline-none focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] text-slate-400 uppercase font-bold">Category</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Dairy / Bakery"
+                  value={newCategory}
+                  onChange={(e) => setNewCategory(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-white focus:outline-none focus:border-blue-500"
+                />
+              </div>
+            </div>
+
+            <div className="text-xs">
+              <label className="text-[10px] text-slate-400 uppercase font-bold">Product Name</label>
+              <input
+                type="text"
+                required
+                placeholder="Full Product Description"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-white focus:outline-none focus:border-blue-500"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 text-xs">
+              <div>
+                <label className="text-[10px] text-slate-400 uppercase font-bold">Cost Price ({storeSettings.currency})</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  required
+                  placeholder="25.00"
+                  value={newCost}
+                  onChange={(e) => setNewCost(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-white focus:outline-none focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] text-slate-400 uppercase font-bold">Retail Price ({storeSettings.currency})</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  required
+                  placeholder="35.00"
+                  value={newRetail}
+                  onChange={(e) => setNewRetail(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-white focus:outline-none focus:border-blue-500"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 text-xs">
+              <div>
+                <label className="text-[10px] text-slate-400 uppercase font-bold">Opening Stock</label>
+                <input
+                  type="number"
+                  required
+                  placeholder="50"
+                  value={newStock}
+                  onChange={(e) => setNewStock(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-white focus:outline-none focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] text-slate-400 uppercase font-bold">Assigned Supplier</label>
+                <select
+                  value={newSupplier}
+                  onChange={(e) => setNewSupplier(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-white focus:outline-none focus:border-blue-500"
+                >
+                  <option value="">Select Vendor...</option>
+                  {suppliers.map((s) => (
+                    <option key={s.id} value={s.name}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowAddModal(false)}
+                className="w-full bg-slate-800 text-xs py-2.5 rounded-xl font-bold"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="w-full bg-blue-600 hover:bg-blue-500 text-white text-xs py-2.5 rounded-xl font-bold"
+              >
+                Save Product
+              </button>
+            </div>
+          </form>
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-slate-950 border border-slate-800 p-5 rounded-3xl flex items-center justify-between">
-          <div>
-            <p className="text-xs text-slate-400 font-semibold uppercase">Total SKUs</p>
-            <p className="text-2xl font-bold text-white mt-1">{inventory.length}</p>
-          </div>
-          <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-2xl text-blue-400">
-            <Package className="w-6 h-6" />
-          </div>
-        </div>
+      {/* Quick Reorder Modal */}
+      {reorderProduct && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+          <form onSubmit={handleQuickReorder} className="bg-slate-900 border border-slate-800 p-6 rounded-2xl w-80 space-y-4 shadow-2xl">
+            <h3 className="font-bold text-white text-sm">Issue Restock PO</h3>
+            <div className="text-xs space-y-2 bg-slate-950 p-3 rounded-lg border border-slate-800">
+              <p className="text-slate-400">Product: <strong className="text-white">{reorderProduct.name}</strong></p>
+              <p className="text-slate-400">Supplier: <strong className="text-blue-400">{reorderProduct.supplier || suppliers[0]?.name}</strong></p>
+              <p className="text-slate-400">Cost Price: <strong className="text-white">R{reorderProduct.costPrice.toFixed(2)}</strong></p>
+            </div>
 
-        <div className="bg-slate-950 border border-slate-800 p-5 rounded-3xl flex items-center justify-between">
-          <div>
-            <p className="text-xs text-slate-400 font-semibold uppercase">Low Stock Warnings</p>
-            <p className="text-2xl font-bold text-amber-400 mt-1">{lowStockItems.length} Items</p>
-          </div>
-          <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-2xl text-amber-400">
-            <AlertTriangle className="w-6 h-6" />
-          </div>
-        </div>
+            <div className="text-xs">
+              <label className="text-[10px] text-slate-400 uppercase font-bold">Order Quantity</label>
+              <input
+                type="number"
+                required
+                value={reorderQty}
+                onChange={(e) => setReorderQty(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-white font-mono font-bold focus:outline-none focus:border-blue-500"
+              />
+            </div>
 
-        <div className="bg-slate-950 border border-slate-800 p-5 rounded-3xl flex items-center justify-between">
-          <div>
-            <p className="text-xs text-slate-400 font-semibold uppercase">Quick Action</p>
-            <Link
-              href="/suppliers"
-              className="inline-flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 font-semibold mt-2"
-            >
-              Manage Supplier POs <ArrowUpRight className="w-4 h-4" />
-            </Link>
-          </div>
-          <div className="p-3 bg-purple-500/10 border border-purple-500/20 rounded-2xl text-purple-400">
-            <FilePlus className="w-6 h-6" />
-          </div>
+            <div className="flex gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setReorderProduct(null)}
+                className="w-full bg-slate-800 text-xs py-2 rounded-xl font-bold"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="w-full bg-blue-600 hover:bg-blue-500 text-white text-xs py-2 rounded-xl font-bold"
+              >
+                Create PO
+              </button>
+            </div>
+          </form>
         </div>
-      </div>
-
-      <div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-slate-950 p-4 rounded-3xl border border-slate-800">
-        <div className="flex items-center gap-3 bg-slate-900 px-3 py-2 rounded-2xl border border-slate-800 w-full md:w-80">
-          <Search className="w-4 h-4 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Search SKU, item, supplier..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-transparent text-xs text-white focus:outline-none placeholder-slate-500"
-          />
-        </div>
-
-        <div className="flex items-center gap-2 overflow-x-auto w-full md:w-auto">
-          {categories.map((cat) => (
-            <button
-              key={cat}
-              onClick={() => setSelectedCategory(cat)}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition ${
-                selectedCategory === cat
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-slate-900 text-slate-400 border border-slate-800 hover:bg-slate-800'
-              }`}
-            >
-              {cat}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="bg-slate-950 border border-slate-800 rounded-3xl overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs text-slate-300">
-            <thead className="bg-slate-900/80 text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-800">
-              <tr>
-                <th className="p-4">SKU</th>
-                <th className="p-4">Item Name</th>
-                <th className="p-4">Category</th>
-                <th className="p-4">Cost Price</th>
-                <th className="p-4">Retail Price</th>
-                <th className="p-4">Current Stock</th>
-                <th className="p-4">Supplier</th>
-                <th className="p-4 text-right">ERP Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-900">
-              {filteredItems.map((item) => {
-                const isLowStock = item.stock <= item.minThreshold;
-                return (
-                  <tr key={item.id} className="hover:bg-slate-900/50 transition">
-                    <td className="p-4 font-mono text-slate-400">{item.sku}</td>
-                    <td className="p-4 font-semibold text-white">{item.name}</td>
-                    <td className="p-4">
-                      <span className="px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 font-medium">
-                        {item.category}
-                      </span>
-                    </td>
-                    <td className="p-4 font-mono">R {item.costPrice.toFixed(2)}</td>
-                    <td className="p-4 font-mono font-bold text-emerald-400">
-                      R {item.price.toFixed(2)}
-                    </td>
-                    <td className="p-4">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`font-mono font-bold px-2 py-0.5 rounded-md ${
-                            isLowStock
-                              ? 'bg-red-500/20 text-red-400 border border-red-500/30'
-                              : 'text-slate-200'
-                          }`}
-                        >
-                          {item.stock} units
-                        </span>
-                        {isLowStock && (
-                          <span className="text-[10px] text-red-400 font-semibold flex items-center gap-1 bg-red-950/60 px-2 py-0.5 rounded-md border border-red-800">
-                            <AlertTriangle className="w-3 h-3" /> LOW
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="p-4 text-slate-400">{item.supplier}</td>
-                    <td className="p-4 text-right">
-                      {isLowStock ? (
-                        <button
-                          onClick={() => handleGeneratePO(item)}
-                          className="bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/40 px-3 py-1.5 rounded-xl font-semibold text-[11px] inline-flex items-center gap-1.5 transition"
-                        >
-                          <FilePlus className="w-3.5 h-3.5" /> Auto-Draft PO
-                        </button>
-                      ) : (
-                        <span className="text-slate-600 text-[11px] font-mono">Stock Optimal</span>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      )}
     </div>
   );
 }
