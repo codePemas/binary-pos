@@ -1,0 +1,130 @@
+datasource db {
+  provider = "sqlite"
+  url      = "env(\"DATABASE_URL\")"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Role {
+  roleID      Int     @id @default(autoincrement())
+  roleName    String  @unique
+  description String?
+  users       User[]
+}
+
+model User {
+  userID        Int          @id @default(autoincrement())
+  fullName      String
+  username      String       @unique
+  password      String
+  email         String       @unique
+  roleID        Int
+  role          Role         @relation(fields: [roleID], references: [roleID])
+  isActive      Boolean      @default(true)
+  sales         Sale[]
+  cashUps       CashUp[]
+  adjustments   StockAdjustment[]
+}
+
+model Category {
+  categoryID   Int       @id @default(autoincrement())
+  categoryName String    @unique
+  description  String?
+  products     Product[]
+}
+
+model Supplier {
+  supplierID    Int             @id @default(autoincrement())
+  supplierName  String
+  contactPerson String
+  phone         String
+  email         String?
+  products      Product[]
+  purchaseOrders PurchaseOrder[]
+}
+
+model Product {
+  productID      Int                   @id @default(autoincrement())
+  sku            String                @unique
+  productName    String
+  categoryId     Int
+  category       Category              @relation(fields: [categoryId], references: [categoryID])
+  supplierId     Int
+  supplier       Supplier              @relation(fields: [supplierId], references: [supplierID])
+  barcode        String                @unique
+  costPrice      Decimal               @default(0.00)
+  retailPrice    Decimal
+  stock          Int                   @default(0)
+  minStock       Int                   @default(10)
+  stockStatus    Boolean               @default(true)
+  salesItems     SaleItem[]
+  poItems        PurchaseOrderLine[]
+  adjustments    StockAdjustment[]
+}
+
+model Sale {
+  saleID         Int         @id @default(autoincrement())
+  saleDate       DateTime    @default(now())
+  cashierID      Int
+  cashier        User        @relation(fields: [cashierID], references: [userID])
+  totalAmount    Decimal
+  discountAmount Decimal     @default(0.00)
+  paymentMethod  String
+  items          SaleItem[]
+}
+
+model SaleItem {
+  saleItemID Int     @id @default(autoincrement())
+  saleID     Int
+  sale       Sale    @relation(fields: [saleID], references: [saleID])
+  productID  Int
+  product    Product @relation(fields: [productID], references: [productID])
+  quantity   Int
+  unitPrice  Decimal
+  totalPrice Decimal
+}
+
+model PurchaseOrder {
+  purchaseOrderID Int                 @id @default(autoincrement())
+  supplierID      Int
+  supplier        Supplier            @relation(fields: [supplierID], references: [supplierID])
+  orderDate       DateTime            @default(now())
+  expectedDate    DateTime
+  status          String              @default("PENDING")
+  totalAmount     Decimal
+  items           PurchaseOrderLine[]
+}
+
+model PurchaseOrderLine {
+  poItemID        Int           @id @default(autoincrement())
+  purchaseOrderID Int
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderID], references: [purchaseOrderID])
+  productID       Int
+  product         Product       @relation(fields: [productID], references: [productID])
+  quantity        Int
+  unitCost        Decimal
+  totalCost       Decimal
+}
+
+model CashUp {
+  cashUpID   Int      @id @default(autoincrement())
+  saleDate   DateTime @default(now())
+  userID     Int
+  user       User     @relation(fields: [userID], references: [userID])
+  totalSales Decimal
+  cashInDrawer Decimal
+  difference Decimal
+  status     String
+}
+
+model StockAdjustment {
+  adjustmentID   Int      @id @default(autoincrement())
+  stockID        Int
+  product        Product  @relation(fields: [stockID], references: [productID])
+  userID         Int
+  user           User     @relation(fields: [userID], references: [userID])
+  adjustmentType String
+  adjustmentDate DateTime @default(now())
+}

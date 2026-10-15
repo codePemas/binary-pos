@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useStore, UserRole } from '@/context/StoreContext';
@@ -9,10 +9,16 @@ export default function Sidebar() {
   const pathname = usePathname();
   const { currentUser, activeRoleView, switchRoleWithPin, logout } = useStore();
 
+  const [mounted, setMounted] = useState(false);
   const [showSwitchModal, setShowSwitchModal] = useState(false);
   const [targetRole, setTargetRole] = useState<UserRole>('cashier');
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState('');
+
+  // Prevent SSR Hydration Mismatch
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const handleOpenSwitch = (role: UserRole) => {
     setTargetRole(role);
@@ -38,20 +44,27 @@ export default function Sidebar() {
     { name: 'Inventory', href: '/inventory' },
     { name: 'Suppliers', href: '/suppliers' },
     { name: 'Staff & Shifts', href: '/staff' },
+    { name: 'Reports', href: '/reports' },
     { name: 'Customers', href: '/customers' },
     { name: 'Settings', href: '/settings' },
   ];
 
-  const currentMenu = activeRoleView === 'manager' ? [...cashierMenu, ...managerMenu] : cashierMenu;
+  // Render cashier menu fallback until client mount is complete to guarantee zero SSR hydration mismatch
+  const currentRole = mounted ? activeRoleView?.toLowerCase() : 'manager';
+  const currentMenu = currentRole === 'manager' ? [...cashierMenu, ...managerMenu] : cashierMenu;
+
+  if (!mounted) {
+    return null; // Avoid rendering mismatch tree before client hydration
+  }
 
   return (
-    <aside className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col justify-between h-screen p-4 text-slate-100 shrink-0 print:hidden">
+    <aside className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col justify-between h-screen p-4 text-slate-100 shrink-0">
       <div>
         <div className="flex items-center justify-between pb-4 mb-4 border-b border-slate-800">
           <div>
-            <h1 className="font-extrabold text-lg">FORTE POS</h1>
-            <span className="text-xs text-blue-400 font-mono">
-              MODE: {activeRoleView.toUpperCase()}
+            <h1 className="font-extrabold text-lg text-white">FORTE POS</h1>
+            <span className="text-xs text-blue-400 font-mono uppercase">
+              MODE: {activeRoleView}
             </span>
           </div>
         </div>
@@ -61,7 +74,7 @@ export default function Sidebar() {
           <button
             onClick={() => handleOpenSwitch('cashier')}
             className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${
-              activeRoleView === 'cashier'
+              activeRoleView?.toLowerCase() === 'cashier'
                 ? 'bg-blue-600 text-white'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
@@ -71,7 +84,7 @@ export default function Sidebar() {
           <button
             onClick={() => handleOpenSwitch('manager')}
             className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${
-              activeRoleView === 'manager'
+              activeRoleView?.toLowerCase() === 'manager'
                 ? 'bg-blue-600 text-white'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
@@ -117,14 +130,16 @@ export default function Sidebar() {
         </div>
       )}
 
-      {/* PIN Verification Modal for Switching Roles */}
+      {/* PIN Verification Modal */}
       {showSwitchModal && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
-          <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl w-80 space-y-4">
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl w-80 space-y-4 shadow-2xl">
             <h3 className="font-bold text-slate-100 text-sm">
               Authorize Switch to {targetRole.toUpperCase()}
             </h3>
-            <p className="text-xs text-slate-400">Enter your employee PIN to verify credentials.</p>
+            <p className="text-xs text-slate-400">
+              Enter your employee PIN to verify credentials.
+            </p>
 
             <input
               type="password"
@@ -132,7 +147,7 @@ export default function Sidebar() {
               value={pinInput}
               onChange={(e) => setPinInput(e.target.value)}
               placeholder="Enter PIN..."
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-center text-lg font-mono font-bold text-blue-400 focus:outline-none"
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-center text-lg font-mono font-bold text-white focus:outline-none focus:border-blue-500"
             />
 
             {pinError && <p className="text-[11px] text-red-400 font-semibold">{pinError}</p>}
@@ -140,13 +155,13 @@ export default function Sidebar() {
             <div className="flex gap-2">
               <button
                 onClick={() => setShowSwitchModal(false)}
-                className="w-full bg-slate-800 text-xs py-2.5 rounded-xl font-bold"
+                className="w-full bg-slate-800 text-xs py-2.5 rounded-xl font-bold text-slate-300"
               >
                 Cancel
               </button>
               <button
                 onClick={handleConfirmSwitch}
-                className="w-full bg-blue-600 text-xs py-2.5 rounded-xl font-bold"
+                className="w-full bg-blue-600 hover:bg-blue-500 text-xs py-2.5 rounded-xl font-bold text-white shadow-lg shadow-blue-600/20"
               >
                 Verify & Switch
               </button>

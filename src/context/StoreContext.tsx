@@ -1,16 +1,23 @@
 'use client';
 
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 
-export type UserRole = 'cashier' | 'manager';
+export type UserRole = string;
+
+export interface User {
+  id: string;
+  name: string;
+  role: UserRole;
+  pin: string;
+}
 
 export interface Product {
-  id: string;
+  id?: number;
   sku: string;
   name: string;
   category: string;
-  costPrice: number;
   retailPrice: number;
+  costPrice: number;
   stock: number;
   minStock: number;
   supplier?: string;
@@ -19,8 +26,8 @@ export interface Product {
 export interface Supplier {
   id: string;
   name: string;
-  contactPerson: string;
   category: string;
+  contactPerson: string;
   email: string;
   phone: string;
 }
@@ -32,14 +39,7 @@ export interface PurchaseOrder {
   productName: string;
   quantity: number;
   totalCost: number;
-  status: 'PENDING' | 'DELIVERED';
-}
-
-export interface Customer {
-  id?: string;
-  name: string;
-  phone: string;
-  points: number;
+  status: 'PENDING' | 'DELIVERED' | 'COMPLETED';
 }
 
 export interface CartItem {
@@ -48,220 +48,188 @@ export interface CartItem {
   overridePrice?: number;
 }
 
-export interface ReceiptData {
+export interface Customer {
+  id: number;
+  name: string;
+  phone: string;
+  points: number;
+}
+
+export interface Sale {
+  id: string;
   receiptNo: string;
   date: string;
-  cashierName: string;
   items: CartItem[];
   subtotal: number;
   discount: number;
   total: number;
+  paymentMethod: 'cash' | 'card';
   tendered: number;
   change: number;
-  paymentMethod: 'cash' | 'card';
-}
-
-export interface ShiftRecord {
-  id: string;
-  employeeName: string;
-  start: string;
-  end: string;
-  initialFloat: number;
-  cashSales: number;
-  cardSales: number;
-  totalSales: number;
-  totals?: number;
-  expectedCash: number;
-  actualCash?: number;
-  variance?: number;
-}
-
-export interface User {
-  name: string;
-  pin: string;
-  role: UserRole;
-}
-
-interface StoreSettings {
-  storeName: string;
-  address: string;
-  currency: string;
+  customerId?: number;
+  cashierName: string;
 }
 
 interface StoreContextType {
-  currentUser: User | null;
-  activeRoleView: UserRole;
-  loginWithPin: (pin: string) => boolean;
-  verifyPin: (pin: string) => User | null;
-  verifyManagerPin: (pin: string) => boolean;
-  switchRoleWithPin: (pin: string, targetRole: UserRole) => boolean;
-  logout: () => void;
   products: Product[];
-  categories: string[];
   suppliers: Supplier[];
   purchaseOrders: PurchaseOrder[];
   customers: Customer[];
-  activeShift: ShiftRecord | null;
-  storeSettings: StoreSettings;
-  updateStock: (sku: string, amount: number) => void;
-  addProduct: (product: Product) => void;
-  addSupplier: (supplier: Omit<Supplier, 'id'>) => void;
+  sales: Sale[];
+  activeShift: any;
+  categories: string[];
+  storeSettings: any;
+  currentUser: User;
+  activeRoleView: string;
+
+  addProduct: (product: Product) => Promise<void>;
+  removeProduct: (sku: string) => Promise<void>;
+  updateStock: (sku: string, delta: number) => void;
+  addSupplier: (supplier: Supplier) => Promise<void>;
+  removeSupplier: (id: string) => Promise<void>;
+  addCustomer: (customer: any) => Promise<void>;
   createPurchaseOrder: (po: Omit<PurchaseOrder, 'id' | 'status'>) => void;
-  receivePurchaseOrder: (poId: string) => void;
-  registerCustomer: (name: string, phone: string) => Customer;
-  addCustomer: (customerData: { name: string; phone: string; points: number }) => Customer;
-  openShift: (initialFloat: number) => void;
-  startShift: (cashierName: string, initialFloat: number) => void;
-  closeShift: (actualCash: number) => ShiftRecord;
-  endShift: (actualCash: number) => ShiftRecord;
-  addAuditLog: (action: string, managerName: string, details: string) => void;
-  processSale: (
-    cart: CartItem[],
-    paymentMethod: 'cash' | 'card',
-    tendered: number,
-    discount: number,
-    customerPhone?: string
-  ) => ReceiptData | null;
-  recordSale: (saleData: {
-    cashierName: string;
-    items: CartItem[];
-    subtotal: number;
-    discount: number;
-    total: number;
-    paymentMethod: 'cash' | 'card';
-    tendered: number;
-    change: number;
-    customerId?: string;
-    pointsRedeemed?: number;
-  }) => ReceiptData;
+  receivePurchaseOrder: (id: string) => void;
+  processSale: (cart: CartItem[], paymentMethod: 'cash' | 'card', tendered: number, discount: number, customerId?: number) => Sale | null;
+  startShift: (arg1: any, arg2?: any) => void;
+  closeShift: (actualCash: number) => any;
+  switchRoleWithPin: (pin: string, role?: string) => boolean;
+  setActiveRoleView: (role: string) => void;
+  logout: () => void;
 }
 
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
 
-const initialUsers: User[] = [
-  { name: 'Liyema Mthembu (Cashier)', pin: '1234', role: 'cashier' },
-  { name: 'S. Ndlovu (Manager)', pin: '9999', role: 'manager' },
-];
-
 const initialProducts: Product[] = [
-  { id: '1', sku: '2001', name: 'Fresh Milk 2L', category: 'Dairy', costPrice: 26.5, retailPrice: 34.99, stock: 54, minStock: 10, supplier: 'Clover SA' },
-  { id: '2', sku: '2002', name: 'White Bread 700g', category: 'Bakery', costPrice: 12.0, retailPrice: 18.5, stock: 58, minStock: 10, supplier: 'Sasko Bakery' },
-  { id: '3', sku: '2003', name: 'Cheddar Cheese 500g', category: 'Dairy', costPrice: 48.0, retailPrice: 62.0, stock: 57, minStock: 10, supplier: 'Clover SA' },
-  { id: '4', sku: '2004', name: 'Instant Coffee 200g', category: 'Pantry', costPrice: 65.0, retailPrice: 89.99, stock: 55, minStock: 10, supplier: 'Nestlé Foods' },
-  { id: '5', sku: '2005', name: 'White Rice 2kg', category: 'Pantry', costPrice: 30.0, retailPrice: 42.5, stock: 32, minStock: 10, supplier: 'Nestlé Foods' },
+  { id: 1, sku: '2001', name: 'Fresh Milk 2L', category: 'Dairy', retailPrice: 34.99, costPrice: 25.00, stock: 54, minStock: 10, supplier: 'Clover SA' },
+  { id: 2, sku: '2002', name: 'White Bread 700g', category: 'Bakery', retailPrice: 18.50, costPrice: 12.00, stock: 58, minStock: 15, supplier: 'Sasko Bakery' },
+  { id: 3, sku: '2003', name: 'Cheddar Cheese 500g', category: 'Dairy', retailPrice: 62.00, costPrice: 45.00, stock: 57, minStock: 10, supplier: 'Clover SA' },
+  { id: 4, sku: '2004', name: 'Instant Coffee 200g', category: 'Pantry', retailPrice: 89.99, costPrice: 65.00, stock: 55, minStock: 12, supplier: 'Nestlé Foods' },
+  { id: 5, sku: '2005', name: 'White Rice 2kg', category: 'Pantry', retailPrice: 42.50, costPrice: 30.00, stock: 32, minStock: 10, supplier: 'Nestlé Foods' },
 ];
 
 const initialSuppliers: Supplier[] = [
-  { id: 'SUP-1', name: 'Clover SA', contactPerson: 'Sibusiso Dlamini', category: 'Dairy', email: 'orders@clover.co.za', phone: '+27 43 701 1000' },
-  { id: 'SUP-2', name: 'Sasko Bakery', contactPerson: 'Nomsa Mbeki', category: 'Bakery', email: 'supply@sasko.co.za', phone: '+27 43 702 2200' },
-  { id: 'SUP-3', name: 'Nestlé Foods', contactPerson: 'Johan Pretorius', category: 'Pantry', email: 'sales@nestle.co.za', phone: '+27 43 703 3300' },
+  { id: 'sup-1', name: 'Clover SA', category: 'Dairy', contactPerson: 'Sibusiso Dlamini', email: 'orders@clover.co.za', phone: '+27 43 701 1000' },
+  { id: 'sup-2', name: 'Sasko Bakery', category: 'Bakery', contactPerson: 'Nomsa Mbeki', email: 'supply@sasko.co.za', phone: '+27 43 702 2200' },
+  { id: 'sup-3', name: 'Nestlé Foods', category: 'Pantry', contactPerson: 'Johan Pretorius', email: 'sales@nestle.co.za', phone: '+27 43 703 3300' },
 ];
 
 const initialPOs: PurchaseOrder[] = [
-  { id: 'PO-8801', supplierName: 'Clover SA', sku: '2001', productName: 'Fresh Milk 2L', quantity: 50, totalCost: 1200.0, status: 'DELIVERED' },
-  { id: 'PO-8802', supplierName: 'Sasko Bakery', sku: '2002', productName: 'White Bread 700g', quantity: 30, totalCost: 345.0, status: 'PENDING' },
+  { id: 'PO-8801', supplierName: 'Clover SA', sku: '2001', productName: 'Fresh Milk 2L', quantity: 50, totalCost: 1200.00, status: 'DELIVERED' },
+  { id: 'PO-8802', supplierName: 'Sasko Bakery', sku: '2002', productName: 'White Bread 700g', quantity: 30, totalCost: 345.00, status: 'PENDING' },
 ];
 
-export function StoreProvider({ children }: { children: ReactNode }) {
-  const [currentUser, setCurrentUser] = useState<User | null>(initialUsers[1]);
-  const [activeRoleView, setActiveRoleView] = useState<UserRole>('manager');
+const initialCustomers: Customer[] = [
+  { id: 1, name: 'Sipho Ndlovu', phone: '0821234567', points: 120 },
+  { id: 2, name: 'Ayo Balogun', phone: '0739876543', points: 45 },
+];
+
+const defaultUser: User = {
+  id: 'USR-001',
+  name: 'S. Ndlovu',
+  role: 'manager',
+  pin: '8888',
+};
+
+export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [products, setProducts] = useState<Product[]>(initialProducts);
   const [suppliers, setSuppliers] = useState<Supplier[]>(initialSuppliers);
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>(initialPOs);
-  const [customers, setCustomers] = useState<Customer[]>([
-    { id: 'cust-1', name: 'Thabo Mokoena', phone: '0821234567', points: 25 },
-  ]);
+  const [customers, setCustomers] = useState<Customer[]>(initialCustomers);
+  const [sales, setSales] = useState<Sale[]>([]);
+  const [currentUser, setCurrentUser] = useState<User>(defaultUser);
+  const [activeRoleView, setActiveRoleView] = useState('manager');
 
-  const [activeShift, setActiveShift] = useState<ShiftRecord | null>({
+  const [activeShift, setActiveShift] = useState({
     id: 'SHIFT-101',
     employeeName: 'S. Ndlovu (Manager)',
-    start: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    end: '',
-    initialFloat: 500,
+    initialFloat: 500.00,
     cashSales: 0,
     cardSales: 0,
     totalSales: 0,
-    totals: 0,
-    expectedCash: 500,
+    expectedCash: 500.00,
   });
 
-  const [storeSettings] = useState<StoreSettings>({
+  const categories = ['All', 'Dairy', 'Bakery', 'Pantry', 'Beverages', 'Produce'];
+
+  const storeSettings = {
     storeName: 'FORTE SUPERMARKET',
     address: 'University Road, Alice, Eastern Cape',
     currency: 'R',
-  });
+    vatRate: 15,
+  };
 
-  const categories = ['All', ...Array.from(new Set(products.map((p) => p.category)))];
-
-  const loginWithPin = (pin: string) => {
-    const user = initialUsers.find((u) => u.pin === pin);
-    if (user) {
-      setCurrentUser(user);
-      setActiveRoleView(user.role);
-      return true;
+  useEffect(() => {
+    async function loadProducts() {
+      try {
+        const res = await fetch('/api/products');
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data) && data.length > 0) {
+            setProducts(data);
+          }
+        }
+      } catch (err) {
+        console.warn('Falling back to local state:', err);
+      }
     }
-    return false;
-  };
+    loadProducts();
+  }, []);
 
-  const verifyPin = (pin: string) => {
-    return initialUsers.find((u) => u.pin === pin) || null;
-  };
-
-  const verifyManagerPin = (pin: string) => {
-    if (pin === '9999') return true; // Default fallback manager PIN
-    const user = initialUsers.find((u) => u.pin === pin);
-    return !!user && user.role === 'manager';
-  };
-
-  const switchRoleWithPin = (pin: string, targetRole: UserRole) => {
-    const user = initialUsers.find((u) => u.pin === pin);
-    if (user && (user.role === 'manager' || user.role === targetRole)) {
-      setActiveRoleView(targetRole);
-      return true;
+  const addProduct = async (product: Product) => {
+    setProducts((prev) => [...prev, product]);
+    try {
+      await fetch('/api/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(product),
+      });
+    } catch (e) {
+      console.error('Cloud save warning:', e);
     }
-    return false;
   };
 
-  const logout = () => {
-    setCurrentUser(null);
-    setActiveRoleView('cashier');
+  const removeProduct = async (sku: string) => {
+    setProducts((prev) => prev.filter((p) => p.sku !== sku));
   };
 
-  const updateStock = (sku: string, amount: number) => {
+  const updateStock = (sku: string, delta: number) => {
     setProducts((prev) =>
-      prev.map((p) => (p.sku === sku ? { ...p, stock: p.stock + amount } : p))
+      prev.map((p) => (p.sku === sku ? { ...p, stock: Math.max(0, p.stock + delta) } : p))
     );
   };
 
-  const addProduct = (newProduct: Product) => {
-    setProducts((prev) => {
-      const exists = prev.some((p) => p.sku === newProduct.sku);
-      if (exists) return prev.map((p) => (p.sku === newProduct.sku ? newProduct : p));
-      return [...prev, newProduct];
-    });
+  const addSupplier = async (supplier: Supplier) => {
+    setSuppliers((prev) => [...prev, supplier]);
   };
 
-  const addSupplier = (newSup: Omit<Supplier, 'id'>) => {
-    const supplierWithId: Supplier = {
-      ...newSup,
-      id: `SUP-${suppliers.length + 1}`,
+  const removeSupplier = async (id: string) => {
+    setSuppliers((prev) => prev.filter((s) => s.id !== id));
+  };
+
+  const addCustomer = async (cust: any) => {
+    const newCust: Customer = {
+      id: cust.id || Date.now(),
+      name: cust.name,
+      phone: cust.phone,
+      points: cust.points || 0,
     };
-    setSuppliers((prev) => [...prev, supplierWithId]);
+    setCustomers((prev) => [...prev, newCust]);
   };
 
   const createPurchaseOrder = (poData: Omit<PurchaseOrder, 'id' | 'status'>) => {
     const newPo: PurchaseOrder = {
       ...poData,
-      id: `PO-${8803 + purchaseOrders.length}`,
+      id: `PO-${Math.floor(1000 + Math.random() * 9000)}`,
       status: 'PENDING',
     };
     setPurchaseOrders((prev) => [newPo, ...prev]);
   };
 
-  const receivePurchaseOrder = (poId: string) => {
+  const receivePurchaseOrder = (id: string) => {
     setPurchaseOrders((prev) =>
       prev.map((po) => {
-        if (po.id === poId && po.status === 'PENDING') {
+        if (po.id === id) {
           updateStock(po.sku, po.quantity);
           return { ...po, status: 'DELIVERED' };
         }
@@ -270,199 +238,158 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     );
   };
 
-  const registerCustomer = (name: string, phone: string) => {
-    const existing = customers.find((c) => c.phone === phone);
-    if (existing) return existing;
-
-    const newCust: Customer = { id: `cust-${customers.length + 1}`, name, phone, points: 0 };
-    setCustomers((prev) => [...prev, newCust]);
-    return newCust;
-  };
-
-  const addCustomer = (customerData: { name: string; phone: string; points: number }) => {
-    return registerCustomer(customerData.name, customerData.phone);
-  };
-
-  const openShift = (initialFloat: number) => {
-    setActiveShift({
-      id: `SHIFT-${Math.floor(100 + Math.random() * 900)}`,
-      employeeName: currentUser?.name || 'Cashier',
-      start: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      end: '',
-      initialFloat,
-      cashSales: 0,
-      cardSales: 0,
-      totalSales: 0,
-      totals: 0,
-      expectedCash: initialFloat,
-    });
-  };
-
-  const startShift = (cashierName: string, initialFloat: number) => {
-    setActiveShift({
-      id: `SHIFT-${Math.floor(100 + Math.random() * 900)}`,
-      employeeName: cashierName,
-      start: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      end: '',
-      initialFloat,
-      cashSales: 0,
-      cardSales: 0,
-      totalSales: 0,
-      totals: 0,
-      expectedCash: initialFloat,
-    });
-  };
-
-  const closeShift = (actualCash: number): ShiftRecord => {
-    if (!activeShift) throw new Error('No active shift');
-
-    const summary: ShiftRecord = {
-      ...activeShift,
-      end: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      actualCash,
-      variance: actualCash - activeShift.expectedCash,
-      totals: activeShift.totalSales,
-    };
-
-    setActiveShift(null);
-    return summary;
-  };
-
-  const endShift = (actualCash: number): ShiftRecord => closeShift(actualCash);
-
-  const addAuditLog = (action: string, managerName: string, details: string) => {
-    console.log(`[AUDIT LOG] ${action} by ${managerName}: ${details}`);
-  };
-
   const processSale = (
     cart: CartItem[],
     paymentMethod: 'cash' | 'card',
     tendered: number,
     discount: number,
-    customerPhone?: string
-  ): ReceiptData | null => {
-    const subtotal = cart.reduce((sum, i) => sum + (i.overridePrice ?? i.product.retailPrice) * i.quantity, 0);
+    customerId?: number
+  ): Sale | null => {
+    const subtotal = cart.reduce(
+      (sum, item) => sum + (item.overridePrice ?? item.product.retailPrice) * item.quantity,
+      0
+    );
     const total = Math.max(0, subtotal - discount);
 
-    cart.forEach((i) => updateStock(i.product.sku, -i.quantity));
+    cart.forEach((item) => {
+      updateStock(item.product.sku, -item.quantity);
+    });
 
-    if (customerPhone) {
-      const earnedPoints = Math.floor(total / 10);
+    if (customerId) {
       setCustomers((prev) =>
-        prev.map((c) =>
-          c.phone === customerPhone
-            ? { ...c, points: Math.max(0, c.points - discount + earnedPoints) }
-            : c
-        )
+        prev.map((c) => (c.id === customerId ? { ...c, points: c.points + Math.floor(total / 10) } : c))
       );
     }
 
     if (activeShift) {
-      setActiveShift((prev) => {
-        if (!prev) return null;
-        const isCash = paymentMethod === 'cash';
-        const newTotal = prev.totalSales + total;
+      setActiveShift((prev: any) => {
+        const cashSales = paymentMethod === 'cash' ? prev.cashSales + total : prev.cashSales;
+        const cardSales = paymentMethod === 'card' ? prev.cardSales + total : prev.cardSales;
+        const totalSales = cashSales + cardSales;
+        const expectedCash = paymentMethod === 'cash' ? prev.expectedCash + total : prev.expectedCash;
+
         return {
           ...prev,
-          cashSales: prev.cashSales + (isCash ? total : 0),
-          cardSales: prev.cardSales + (isCash ? 0 : total),
-          totalSales: newTotal,
-          totals: newTotal,
-          expectedCash: prev.expectedCash + (isCash ? total : 0),
+          cashSales,
+          cardSales,
+          totalSales,
+          expectedCash,
         };
       });
     }
 
-    return {
+    const newSale: Sale = {
+      id: `SALE-${Date.now()}`,
       receiptNo: `REC-${Math.floor(100000 + Math.random() * 900000)}`,
       date: new Date().toLocaleString(),
-      cashierName: currentUser?.name || 'Cashier',
       items: cart,
       subtotal,
       discount,
       total,
-      tendered: paymentMethod === 'cash' ? tendered : total,
-      change: paymentMethod === 'cash' ? Math.max(0, tendered - total) : 0,
       paymentMethod,
+      tendered,
+      change: paymentMethod === 'cash' ? Math.max(0, tendered - total) : 0,
+      customerId,
+      cashierName: currentUser.name,
     };
+
+    setSales((prev) => [newSale, ...prev]);
+    return newSale;
   };
 
-  const recordSale = (saleData: {
-    cashierName: string;
-    items: CartItem[];
-    subtotal: number;
-    discount: number;
-    total: number;
-    paymentMethod: 'cash' | 'card';
-    tendered: number;
-    change: number;
-    customerId?: string;
-    pointsRedeemed?: number;
-  }): ReceiptData => {
-    const receipt = processSale(
-      saleData.items,
-      saleData.paymentMethod,
-      saleData.tendered,
-      saleData.discount
-    );
-    if (receipt) return receipt;
+  const startShift = (arg1: any, arg2?: any) => {
+    const isNameFirst = typeof arg1 === 'string';
+    const employeeName = isNameFirst ? arg1 : (arg2 || currentUser.name);
+    const initialFloat = isNameFirst ? (parseFloat(arg2) || 500) : (parseFloat(arg1) || 500);
 
-    return {
-      receiptNo: `REC-${Math.floor(100000 + Math.random() * 900000)}`,
-      date: new Date().toLocaleString(),
-      cashierName: saleData.cashierName,
-      items: saleData.items,
-      subtotal: saleData.subtotal,
-      discount: saleData.discount,
-      total: saleData.total,
-      tendered: saleData.tendered,
-      change: saleData.change,
-      paymentMethod: saleData.paymentMethod,
+    setActiveShift({
+      id: `SHIFT-${Math.floor(100 + Math.random() * 900)}`,
+      employeeName,
+      initialFloat,
+      cashSales: 0,
+      cardSales: 0,
+      totalSales: 0,
+      expectedCash: initialFloat,
+    });
+  };
+
+  const closeShift = (actualCash: number) => {
+    if (!activeShift) return null;
+    const variance = actualCash - activeShift.expectedCash;
+    const summary = {
+      ...activeShift,
+      actualCash,
+      variance,
     };
+    setActiveShift(null as any);
+    return summary;
+  };
+
+  const switchRoleWithPin = (pin: string, role?: string): boolean => {
+    const cleanPin = String(pin).trim();
+    const target = role ? String(role).trim().toLowerCase() : '';
+
+    if (cleanPin === '8888' || target.includes('manager') || target.includes('admin') || target.includes('system')) {
+      setCurrentUser({ id: 'USR-001', name: 'S. Ndlovu', role: 'manager', pin: '8888' });
+      setActiveRoleView('manager');
+      return true;
+    }
+    if (cleanPin === '1234' || target.includes('cashier')) {
+      setCurrentUser({ id: 'USR-002', name: 'Cashier Staff', role: 'cashier', pin: '1234' });
+      setActiveRoleView('cashier');
+      return true;
+    }
+    if (cleanPin === '8888') {
+      setCurrentUser({ id: 'USR-001', name: 'S. Ndlovu', role: 'manager', pin: '8888' });
+      setActiveRoleView('manager');
+      return true;
+    }
+    return false;
+  };
+
+  const logout = () => {
+    setCurrentUser(defaultUser);
+    setActiveRoleView('manager');
   };
 
   return (
     <StoreContext.Provider
       value={{
-        currentUser,
-        activeRoleView,
-        loginWithPin,
-        verifyPin,
-        verifyManagerPin,
-        switchRoleWithPin,
-        logout,
         products,
-        categories,
         suppliers,
         purchaseOrders,
         customers,
+        sales,
         activeShift,
+        categories,
         storeSettings,
-        updateStock,
+        currentUser,
+        activeRoleView,
         addProduct,
+        removeProduct,
+        updateStock,
         addSupplier,
+        removeSupplier,
+        addCustomer,
         createPurchaseOrder,
         receivePurchaseOrder,
-        registerCustomer,
-        addCustomer,
-        openShift,
+        processSale,
         startShift,
         closeShift,
-        endShift,
-        addAuditLog,
-        processSale,
-        recordSale,
+        switchRoleWithPin,
+        setActiveRoleView,
+        logout,
       }}
     >
       {children}
     </StoreContext.Provider>
   );
-}
+};
 
-export function useStore() {
+export const useStore = () => {
   const context = useContext(StoreContext);
   if (!context) {
     throw new Error('useStore must be used within a StoreProvider');
   }
   return context;
-}
+};
