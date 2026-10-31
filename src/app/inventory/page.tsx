@@ -57,24 +57,43 @@ export default function StockControlPage() {
       costPrice: parseFloat(newProduct.costPrice) || 0,
       stock: parseInt(newProduct.stock) || 0,
       minStock: parseInt(newProduct.minStock) || 10,
-      supplier: newProduct.supplier || 'N/A'
+      supplier: newProduct.supplier || 'N/A',
     };
 
-    if (addProduct) {
-      await addProduct(item);
-    }
+    try {
+      // 1. Save directly to the Neon database via your API route
+      const res = await fetch('/api/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(item),
+      });
 
-    setShowAddProductModal(false);
-    setNewProduct({
-      sku: '',
-      name: '',
-      category: 'Dairy',
-      retailPrice: '',
-      costPrice: '',
-      stock: '',
-      minStock: '10',
-      supplier: ''
-    });
+      if (!res.ok) {
+        throw new Error('Failed to save to database');
+      }
+
+      const savedItem = await res.json();
+
+      // 2. Update local context state
+      if (addProduct) {
+        await addProduct(savedItem);
+      }
+
+      setShowAddProductModal(false);
+      setNewProduct({
+        sku: '',
+        name: '',
+        category: 'Dairy',
+        retailPrice: '',
+        costPrice: '',
+        stock: '',
+        minStock: '10',
+        supplier: '',
+      });
+    } catch (error) {
+      console.error('Error saving product:', error);
+      alert('Error saving product to database.');
+    }
   };
 
   // Handle Delete Product
