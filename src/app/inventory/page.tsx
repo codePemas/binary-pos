@@ -17,6 +17,7 @@ interface Product {
 export default function InventoryPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [saving, setSaving] = useState<boolean>(false);
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
 
   // Form state
@@ -29,7 +30,6 @@ export default function InventoryPage() {
   const [minStock, setMinStock] = useState('10');
   const [supplier, setSupplier] = useState('');
 
-  // 1. Fetch live data from Neon Postgres API on component mount
   const fetchProducts = async () => {
     try {
       setLoading(true);
@@ -39,7 +39,7 @@ export default function InventoryPage() {
         setProducts(data);
       }
     } catch (err) {
-      console.error('Failed to load products from database:', err);
+      console.error('Failed to load products:', err);
     } finally {
       setLoading(false);
     }
@@ -49,12 +49,15 @@ export default function InventoryPage() {
     fetchProducts();
   }, []);
 
-  // 2. Save product directly to database and refetch
   const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !sku) return;
+    if (!name || !sku) {
+      alert('Please fill in both SKU and Product Name.');
+      return;
+    }
 
     try {
+      setSaving(true);
       const res = await fetch('/api/products', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -71,7 +74,6 @@ export default function InventoryPage() {
       });
 
       if (res.ok) {
-        // Clear form, close modal, and re-fetch real database items
         setSku('');
         setName('');
         setRetailPrice('');
@@ -80,9 +82,14 @@ export default function InventoryPage() {
         setSupplier('');
         setIsModalOpen(false);
         await fetchProducts();
+      } else {
+        const errData = await res.json();
+        alert(`Error: ${errData.error || 'Failed to save'}`);
       }
     } catch (err) {
       console.error('Error saving product:', err);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -101,7 +108,6 @@ export default function InventoryPage() {
         </button>
       </div>
 
-      {/* Inventory Table */}
       <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
         <table className="w-full text-left text-sm text-slate-300">
           <thead className="bg-slate-800/50 text-slate-400 uppercase text-xs">
@@ -116,11 +122,11 @@ export default function InventoryPage() {
           <tbody className="divide-y divide-slate-800">
             {loading ? (
               <tr>
-                <td colSpan={5} className="p-6 text-center text-slate-500">Loading products from Neon database...</td>
+                <td colSpan={5} className="p-6 text-center text-slate-500">Loading products from database...</td>
               </tr>
             ) : products.length === 0 ? (
               <tr>
-                <td colSpan={5} className="p-6 text-center text-slate-500">No products found in database. Add one above.</td>
+                <td colSpan={5} className="p-6 text-center text-slate-500">No products found. Add one above.</td>
               </tr>
             ) : (
               products.map((p) => (
@@ -146,13 +152,18 @@ export default function InventoryPage() {
         </table>
       </div>
 
-      {/* Modal Overlay */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
           <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 w-full max-w-lg shadow-2xl">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-lg font-bold text-white">+ Add New Inventory Product</h2>
-              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-white">✕</button>
+              <button 
+                type="button" 
+                onClick={() => setIsModalOpen(false)} 
+                className="text-slate-400 hover:text-white"
+              >
+                ✕
+              </button>
             </div>
 
             <form onSubmit={handleSaveProduct} className="space-y-4">
@@ -245,7 +256,7 @@ export default function InventoryPage() {
                 <label className="block text-xs text-slate-400 mb-1">SUPPLIER NAME</label>
                 <input
                   type="text"
-                  placeholder="e.g. Coca-Cola SA"
+                  placeholder="e.g. Inkomazi Ltd"
                   value={supplier}
                   onChange={(e) => setSupplier(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-white text-sm focus:outline-none focus:border-blue-500"
@@ -262,9 +273,10 @@ export default function InventoryPage() {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium"
+                  disabled={saving}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 text-white rounded-lg text-sm font-medium transition"
                 >
-                  Save Product
+                  {saving ? 'Saving...' : 'Save Product'}
                 </button>
               </div>
             </form>
