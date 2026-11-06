@@ -1,156 +1,118 @@
 'use client';
 
-import React from 'react';
-import { useStore } from '@/context/StoreContext';
-import { ShoppingCart, Package, AlertTriangle, CheckCircle, Truck, TrendingUp, Settings, Users, Plus, FileText } from 'lucide-react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 
-export default function ManagerDashboardPage() {
-  const { products, purchaseOrders, receivePurchaseOrder, currentUser } = useStore();
+interface DashboardData {
+  todaySales: number;
+  pendingOrders: number;
+  totalProducts: number;
+  lowStockItems: number;
+  totalInventoryValue: number;
+  recentActivity: Array<{ id: number; text: string; time: string; type: string }>;
+}
 
-  // Compute metrics for SC4 / Manager Dashboard
-  const todaysSalesTotal = 18650.00; // Simulated/Tracked daily sales
-  const pendingOrdersCount = purchaseOrders.filter(po => po.status === 'PENDING').length;
-  const totalProductsCount = products.length;
-  const lowStockCount = products.filter(p => p.stock <= p.minStock).length;
+export default function DashboardPage() {
+  const [data, setData] = useState<DashboardData | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+
+  useEffect(() => {
+    async function fetchDashboardStats() {
+      try {
+        const res = await fetch('/api/dashboard');
+        if (res.ok) {
+          const json = await res.json();
+          setData(json);
+        }
+      } catch (err) {
+        console.error('Failed to load dashboard stats:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchDashboardStats();
+  }, []);
 
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
-      {/* Header with Actor Context */}
-      <div className="flex items-center justify-between border-b border-slate-800 pb-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="bg-purple-600 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase">
-              Actor: Store Manager
-            </span>
-            <span className="text-xs text-slate-400 font-mono"> View Stock & Approve Orders</span>
+    <div className="p-6 bg-slate-950 text-white min-h-screen">
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold">Manager Dashboard</h1>
+        <p className="text-slate-400 text-sm">Monitor live operations and manage store activities from your Neon cloud database.</p>
+      </div>
+
+      {/* Metrics Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl">
+          <div className="text-slate-400 text-xs uppercase font-bold tracking-wider">Today's Sales</div>
+          <div className="text-2xl font-extrabold text-white mt-2">
+            {loading ? '...' : `R${data?.todaySales.toLocaleString('en-ZA', { minimumFractionDigits: 2 })}`}
           </div>
-          <h1 className="text-xl font-extrabold text-white mt-1">Manager Dashboard</h1>
-          <p className="text-xs text-slate-400">Monitor operations and manage store activities from one central location.</p>
+          <div className="text-emerald-400 text-xs font-semibold mt-1">▲ Live from POS</div>
+        </div>
+
+        <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl">
+          <div className="text-slate-400 text-xs uppercase font-bold tracking-wider">Pending Orders</div>
+          <div className="text-2xl font-extrabold text-white mt-2">
+            {loading ? '...' : data?.pendingOrders}
+          </div>
+          <div className="text-amber-400 text-xs font-semibold mt-1">Awaiting approval</div>
+        </div>
+
+        <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl">
+          <div className="text-slate-400 text-xs uppercase font-bold tracking-wider">Products in Stock</div>
+          <div className="text-2xl font-extrabold text-white mt-2">
+            {loading ? '...' : data?.totalProducts}
+          </div>
+          <div className="text-blue-400 text-xs font-semibold mt-1">Across all categories</div>
+        </div>
+
+        <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl">
+          <div className="text-slate-400 text-xs uppercase font-bold tracking-wider">Low Stock Items</div>
+          <div className="text-2xl font-extrabold text-white mt-2">
+            {loading ? '...' : data?.lowStockItems}
+          </div>
+          <div className={`text-xs font-semibold mt-1 ${data && data.lowStockItems > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+            {data && data.lowStockItems > 0 ? 'Needs attention' : 'All stock healthy'}
+          </div>
         </div>
       </div>
 
-      {/* Top Metrics Cards (SC4) */}
-      <div className="grid grid-cols-4 gap-4">
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2">
-          <div className="flex items-center justify-between text-slate-400">
-            <span className="text-xs font-bold uppercase">Today's Sales</span>
-            <ShoppingCart className="w-4 h-4 text-blue-400" />
-          </div>
-          <h3 className="text-xl font-extrabold text-white">R{todaysSalesTotal.toLocaleString('en-ZA', { minimumFractionDigits: 2 })}</h3>
-          <p className="text-[10px] text-green-400 font-semibold">▲ 12% vs yesterday</p>
-        </div>
-
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2">
-          <div className="flex items-center justify-between text-slate-400">
-            <span className="text-xs font-bold uppercase">Pending Orders</span>
-            <Truck className="w-4 h-4 text-amber-400" />
-          </div>
-          <h3 className="text-xl font-extrabold text-white">{pendingOrdersCount}</h3>
-          <p className="text-[10px] text-slate-400">Awaiting approval</p>
-        </div>
-
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2">
-          <div className="flex items-center justify-between text-slate-400">
-            <span className="text-xs font-bold uppercase">Products in Stock</span>
-            <Package className="w-4 h-4 text-blue-400" />
-          </div>
-          <h3 className="text-xl font-extrabold text-white">{totalProductsCount}</h3>
-          <p className="text-[10px] text-slate-400">Across all categories</p>
-        </div>
-
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2">
-          <div className="flex items-center justify-between text-slate-400">
-            <span className="text-xs font-bold uppercase">Low Stock Items</span>
-            <AlertTriangle className="w-4 h-4 text-red-400" />
-          </div>
-          <h3 className="text-xl font-extrabold text-red-400">{lowStockCount}</h3>
-          <p className="text-[10px] text-red-400/80 font-semibold">Need attention</p>
-        </div>
-      </div>
-
-      {/* Management Tools Navigation Grid (SC4) */}
-      <div className="space-y-3">
-        <h2 className="text-sm font-bold text-white uppercase tracking-wider">Management Tools</h2>
-        <div className="grid grid-cols-3 gap-4">
-          <Link
-            href="/inventory"
-            className="bg-slate-900 border border-slate-800 hover:border-blue-500/50 rounded-2xl p-4 flex items-center justify-between transition-all group"
-          >
-            <div className="flex items-center gap-3">
-              <div className="bg-blue-600/10 text-blue-400 p-2.5 rounded-xl border border-blue-500/20">
-                <Package className="w-4 h-4" />
-              </div>
-              <div>
-                <h4 className="text-xs font-bold text-white group-hover:text-blue-300">Stock Management</h4>
-                <p className="text-[10px] text-slate-400">Manage inventory and stock levels</p>
-              </div>
-            </div>
+      {/* Management Tools Navigation */}
+      <div className="mb-8">
+        <h2 className="text-lg font-bold mb-4">Management Tools</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Link href="/inventory" className="bg-slate-900 border border-slate-800 p-5 rounded-2xl hover:border-blue-500 transition block">
+            <h3 className="font-bold text-white">Stock Management</h3>
+            <p className="text-xs text-slate-400 mt-1">Manage inventory levels and add products to Neon DB.</p>
           </Link>
-
-          <Link
-            href="/suppliers"
-            className="bg-slate-900 border border-slate-800 hover:border-blue-500/50 rounded-2xl p-4 flex items-center justify-between transition-all group"
-          >
-            <div className="flex items-center gap-3">
-              <div className="bg-amber-600/10 text-amber-400 p-2.5 rounded-xl border border-amber-500/20">
-                <CheckCircle className="w-4 h-4" />
-              </div>
-              <div>
-                <h4 className="text-xs font-bold text-white group-hover:text-amber-300">Approve Orders</h4>
-                <p className="text-[10px] text-slate-400">Review and approve purchase orders</p>
-              </div>
-            </div>
+          <Link href="/suppliers" className="bg-slate-900 border border-slate-800 p-5 rounded-2xl hover:border-blue-500 transition block">
+            <h3 className="font-bold text-white">Approve Orders</h3>
+            <p className="text-xs text-slate-400 mt-1">Review and approve supplier purchase orders.</p>
           </Link>
-
-          <Link
-            href="/staff"
-            className="bg-slate-900 border border-slate-800 hover:border-blue-500/50 rounded-2xl p-4 flex items-center justify-between transition-all group"
-          >
-            <div className="flex items-center gap-3">
-              <div className="bg-green-600/10 text-green-400 p-2.5 rounded-xl border border-green-500/20">
-                <Users className="w-4 h-4" />
-              </div>
-              <div>
-                <h4 className="text-xs font-bold text-white group-hover:text-green-300">Staff Management</h4>
-                <p className="text-[10px] text-slate-400">Manage staff and roles</p>
-              </div>
-            </div>
+          <Link href="/staff" className="bg-slate-900 border border-slate-800 p-5 rounded-2xl hover:border-blue-500 transition block">
+            <h3 className="font-bold text-white">Staff Management</h3>
+            <p className="text-xs text-slate-400 mt-1">Manage staff roles, shifts, and permissions.</p>
           </Link>
         </div>
       </div>
 
-      {/* Recent Activity Section (SC4) */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-bold text-white flex items-center gap-2">
-            <FileText className="w-4 h-4 text-blue-400" /> Recent Activity Audit Log
-          </h2>
-          <span className="text-[10px] text-slate-400 font-mono">Real-time system events</span>
-        </div>
-
-        <div className="divide-y divide-slate-800 text-xs">
-          <div className="py-3 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-green-500"></span>
-              <span className="font-bold text-white">Stock delivery received from Clover SA</span>
-            </div>
-            <span className="text-[10px] text-slate-400 font-mono">Today, 10:24 AM</span>
-          </div>
-          <div className="py-3 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-blue-500"></span>
-              <span className="font-bold text-white">Purchase Order PO-8802 approved by Store Manager</span>
-            </div>
-            <span className="text-[10px] text-slate-400 font-mono">Today, 09:48 AM</span>
-          </div>
-          <div className="py-3 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-purple-500"></span>
-              <span className="font-bold text-white">Daily sales report generated</span>
-            </div>
-            <span className="text-[10px] text-slate-400 font-mono">Yesterday, 08:30 PM</span>
-          </div>
+      {/* Recent Activity Audit Log */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+        <h2 className="text-lg font-bold mb-4">Recent Activity Audit Log</h2>
+        <div className="space-y-3">
+          {loading ? (
+            <div className="text-slate-500 text-sm">Loading activity logs...</div>
+          ) : (
+            data?.recentActivity.map((log) => (
+              <div key={log.id} className="flex justify-between items-center py-2.5 border-b border-slate-800/60 text-sm">
+                <div className="flex items-center gap-3">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                  <span className="text-slate-300">{log.text}</span>
+                </div>
+                <span className="text-xs text-slate-500">{log.time}</span>
+              </div>
+            ))
+          )}
         </div>
       </div>
     </div>
