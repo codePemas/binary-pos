@@ -13,17 +13,22 @@ interface Product {
 export default function DashboardPage() {
   const [totalProducts, setTotalProducts] = useState<number>(0);
   const [lowStockItems, setLowStockItems] = useState<number>(0);
+  const [totalValue, setTotalValue] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
-    async function fetchStoreMetrics() {
+    async function loadMetrics() {
       try {
         const res = await fetch('/api/products');
         if (res.ok) {
           const products: Product[] = await res.json();
           setTotalProducts(products.length);
-          const lowStock = products.filter((p) => p.stock <= (p.minStock || 10)).length;
+          
+          const lowStock = products.filter((p: Product) => p.stock <= (p.minStock || 10)).length;
           setLowStockItems(lowStock);
+
+          const valuation = products.reduce((sum: number, p: Product) => sum + (Number(p.retailPrice) * p.stock), 0);
+          setTotalValue(valuation);
         }
       } catch (err) {
         console.error('Failed to load dashboard metrics:', err);
@@ -31,13 +36,13 @@ export default function DashboardPage() {
         setLoading(false);
       }
     }
-    fetchStoreMetrics();
+    loadMetrics();
   }, []);
 
-  const recentActivity = [
-    { id: 1, text: 'System connected to Neon cloud database', time: 'Just now', type: 'success' },
-    { id: 2, text: `Inventory synchronized (${totalProducts} items tracked)`, time: 'Today', type: 'info' },
-    { id: 3, text: 'Manager dashboard stats loaded dynamically', time: 'Today', type: 'purple' },
+  const auditLogs = [
+    { id: 1, text: 'Connected to Neon PostgreSQL cloud database', time: 'Just now' },
+    { id: 2, text: `Active inventory audit: ${totalProducts} products indexed`, time: 'Today' },
+    { id: 3, text: `Stock valuation calculated: R${totalValue.toFixed(2)}`, time: 'Today' },
   ];
 
   return (
@@ -50,15 +55,19 @@ export default function DashboardPage() {
       {/* Metrics Grid */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
         <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl">
-          <div className="text-slate-400 text-xs uppercase font-bold tracking-wider">Today's Sales</div>
-          <div className="text-2xl font-extrabold text-white mt-2">R18,650.00</div>
-          <div className="text-emerald-400 text-xs font-semibold mt-1">▲ Live from POS</div>
+          <div className="text-slate-400 text-xs uppercase font-bold tracking-wider">Estimated Turnover</div>
+          <div className="text-2xl font-extrabold text-white mt-2">
+            {loading ? '...' : `R${(totalValue * 0.15).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+          </div>
+          <div className="text-emerald-400 text-xs font-semibold mt-1">▲ Live calculated from stock</div>
         </div>
 
         <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl">
-          <div className="text-slate-400 text-xs uppercase font-bold tracking-wider">Pending Orders</div>
-          <div className="text-2xl font-extrabold text-white mt-2">1</div>
-          <div className="text-amber-400 text-xs font-semibold mt-1">Awaiting approval</div>
+          <div className="text-slate-400 text-xs uppercase font-bold tracking-wider">Restock Alerts</div>
+          <div className="text-2xl font-extrabold text-white mt-2">
+            {loading ? '...' : lowStockItems}
+          </div>
+          <div className="text-amber-400 text-xs font-semibold mt-1">Low stock items requiring orders</div>
         </div>
 
         <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl">
@@ -106,7 +115,7 @@ export default function DashboardPage() {
           {loading ? (
             <div className="text-slate-500 text-sm">Loading activity logs...</div>
           ) : (
-            recentActivity.map((log) => (
+            auditLogs.map((log) => (
               <div key={log.id} className="flex justify-between items-center py-2.5 border-b border-slate-800/60 text-sm">
                 <div className="flex items-center gap-3">
                   <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
