@@ -38,6 +38,14 @@ export default function CashierPage() {
   // Receipt Modal State
   const [activeReceipt, setActiveReceipt] = useState<any | null>(null);
 
+  // Shift & Reconciliation State
+  const [isShiftModalOpen, setIsShiftModalOpen] = useState(false);
+  const [startingFloat, setStartingFloat] = useState('500.00');
+  const [expectedCashSales, setExpectedCashSales] = useState(1450.00); // Tracked live or simulated shift total
+  const [expectedCardSales, setExpectedCardSales] = useState(890.00);
+  const [actualCashCounted, setActualCashCounted] = useState('');
+  const [shiftClosedReport, setShiftClosedReport] = useState<any | null>(null);
+
   const mockCustomers: Customer[] = [
     { id: '1', name: 'Sipho Ndlovu', phone: '0821234567', points: 150 },
     { id: '2', name: 'Nomsa Sithole', phone: '0739876543', points: 320 },
@@ -130,7 +138,7 @@ export default function CashierPage() {
         return;
       }
       if (selectedCustomer.points < Math.ceil(total)) {
-        alert(`Insufficient points! Customer has ${selectedCustomer.points} pts, but total is R${total.toFixed(2)}.`);
+        alert(`Insufficient points! Customer has ${selectedCustomer.points} pts.`);
         return;
       }
     }
@@ -138,7 +146,7 @@ export default function CashierPage() {
     const receiptData = {
       receiptNo: `REC-${Math.floor(100000 + Math.random() * 900000)}`,
       date: new Date().toLocaleString(),
-      cashier: 'S. Ndlovu (MANAGER)',
+      cashier: 'S. Ndlovu (CASHIER)',
       customer: selectedCustomer ? `${selectedCustomer.name} (${selectedCustomer.phone})` : 'Walk-in Customer',
       items: [...cart],
       subtotal,
@@ -161,6 +169,28 @@ export default function CashierPage() {
     await fetchProducts();
   };
 
+  const handleReconcileShift = (e: React.FormEvent) => {
+    e.preventDefault();
+    const floatVal = parseFloat(startingFloat) || 0;
+    const actualCash = parseFloat(actualCashCounted) || 0;
+    const expectedTotalCashDrawer = floatVal + expectedCashSales;
+    const variance = actualCash - expectedTotalCashDrawer;
+
+    const report = {
+      timestamp: new Date().toLocaleString(),
+      cashier: 'S. Ndlovu',
+      float: floatVal,
+      expectedCash: expectedCashSales,
+      expectedCard: expectedCardSales,
+      expectedDrawerTotal: expectedTotalCashDrawer,
+      actualCounted: actualCash,
+      variance: variance,
+      status: variance === 0 ? 'BALANCED' : variance > 0 ? 'OVER' : 'SHORT',
+    };
+
+    setShiftClosedReport(report);
+  };
+
   const categories = ['All', 'Dairy', 'Bakery', 'Pantry', 'Beverages', 'Produce'];
 
   const filteredProducts = products.filter((p) => {
@@ -173,9 +203,17 @@ export default function CashierPage() {
     <div className="flex h-screen bg-slate-950 text-white overflow-hidden">
       {/* Left Catalog Area */}
       <div className="flex-1 flex flex-col p-6 overflow-y-auto">
-        <div className="mb-4">
-          <h1 className="text-2xl font-bold">Point of Sale (POS) Terminal</h1>
-          <p className="text-slate-400 text-sm">Process customer purchases, handle card/points, and issue receipts.</p>
+        <div className="flex justify-between items-center mb-4">
+          <div>
+            <h1 className="text-2xl font-bold">Point of Sale (POS) Terminal</h1>
+            <p className="text-slate-400 text-sm">Process customer purchases, handle card/points, and issue receipts.</p>
+          </div>
+          <button
+            onClick={() => setIsShiftModalOpen(true)}
+            className="bg-amber-600 hover:bg-amber-700 text-white font-bold px-4 py-2 rounded-xl text-xs transition shadow-lg flex items-center gap-2"
+          >
+            🔒 Close Shift / Cash-Out
+          </button>
         </div>
 
         <div className="mb-4 space-y-3">
@@ -376,6 +414,131 @@ export default function CashierPage() {
         </div>
       </div>
 
+      {/* Shift Cash-Out / Reconciliation Modal */}
+      {isShiftModalOpen && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 w-full max-w-md shadow-2xl space-y-4">
+            <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+              <h2 className="text-lg font-bold text-white">🔒 Shift Cash-Out & Reconciliation</h2>
+              <button onClick={() => { setIsShiftModalOpen(false); setShiftClosedReport(null); }} className="text-slate-400 hover:text-white">✕</button>
+            </div>
+
+            {!shiftClosedReport ? (
+              <form onSubmit={handleReconcileShift} className="space-y-4 text-sm">
+                <div className="bg-slate-950 p-3 rounded-lg border border-slate-800 space-y-2 text-xs">
+                  <div className="flex justify-between text-slate-400">
+                    <span>Expected Cash Sales:</span>
+                    <span className="font-bold text-white">R{expectedCashSales.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-slate-400">
+                    <span>Expected Card Sales:</span>
+                    <span className="font-bold text-white">R{expectedCardSales.toFixed(2)}</span>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">STARTING TILL FLOAT (R)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    required
+                    value={startingFloat}
+                    onChange={(e) => setStartingFloat(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-white text-sm focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">ACTUAL PHYSICAL CASH COUNTED IN DRAWER (R)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    required
+                    placeholder="Count notes and coins..."
+                    value={actualCashCounted}
+                    onChange={(e) => setActualCashCounted(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-white text-sm focus:outline-none focus:border-blue-500 font-bold text-emerald-400"
+                  />
+                </div>
+
+                <div className="flex gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsShiftModalOpen(false)}
+                    className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2.5 rounded-lg text-xs"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 bg-amber-600 hover:bg-amber-700 text-white font-bold py-2.5 rounded-lg text-xs"
+                  >
+                    Generate Reconciliation Report
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <div className="space-y-4">
+                <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2 text-xs font-mono">
+                  <div className="text-center border-b border-slate-800 pb-2 font-bold text-white text-sm">
+                    SHIFT CLOSING REPORT
+                  </div>
+                  <div className="flex justify-between text-slate-400">
+                    <span>Cashier:</span>
+                    <span>{shiftClosedReport.cashier}</span>
+                  </div>
+                  <div className="flex justify-between text-slate-400">
+                    <span>Time:</span>
+                    <span>{shiftClosedReport.timestamp}</span>
+                  </div>
+                  <div className="flex justify-between text-slate-400 pt-2 border-t border-slate-800">
+                    <span>Starting Float:</span>
+                    <span>R{shiftClosedReport.float.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-slate-400">
+                    <span>Expected Cash:</span>
+                    <span>R{shiftClosedReport.expectedCash.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-slate-400">
+                    <span>Expected Drawer Total:</span>
+                    <span>R{shiftClosedReport.expectedDrawerTotal.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-slate-400">
+                    <span>Actual Counted:</span>
+                    <span>R{shiftClosedReport.actualCounted.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between font-bold pt-2 border-t border-slate-800 text-sm">
+                    <span>VARIANCE:</span>
+                    <span className={shiftClosedReport.variance === 0 ? 'text-emerald-400' : 'text-red-400'}>
+                      R{shiftClosedReport.variance.toFixed(2)} ({shiftClosedReport.status})
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => window.print()}
+                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg text-xs"
+                  >
+                    🖨️ Print Report
+                  </button>
+                  <button
+                    onClick={() => {
+                      setIsShiftModalOpen(false);
+                      setShiftClosedReport(null);
+                    }}
+                    className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2.5 rounded-lg text-xs"
+                  >
+                    Close & Lock Terminal
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Printable Receipt Modal */}
       {activeReceipt && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
           <div className="bg-white text-black rounded-xl p-6 w-full max-w-sm shadow-2xl font-mono text-xs space-y-4">
