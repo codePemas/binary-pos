@@ -2,8 +2,10 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 export default function Sidebar() {
+  const router = useRouter();
   const [enteredPin, setEnteredPin] = useState('');
   const [targetMode, setTargetMode] = useState<'CASHIER' | 'MANAGER' | null>(null);
   const [isPinModalOpen, setIsPinModalOpen] = useState(false);
@@ -19,26 +21,25 @@ export default function Sidebar() {
     const MANAGER_PIN = '9999';
 
     if (targetMode === 'CASHIER' && enteredPin !== CASHIER_PIN) {
-      alert('❌ Access Denied: Invalid Cashier PIN! ');
+      alert('❌ Access Denied: Invalid Cashier PIN! (PIN is 1234)');
       setEnteredPin('');
       return;
     }
 
     if (targetMode === 'MANAGER' && enteredPin !== MANAGER_PIN) {
-      alert('❌ Access Denied: Invalid Manager PIN!');
+      alert('❌ Access Denied: Invalid Manager PIN! (PIN is 9999)');
       setEnteredPin('');
       return;
     }
 
     // PIN matches successfully
-    alert('✔ Authentication Successful');
     setIsPinModalOpen(false);
     setEnteredPin('');
 
     if (targetMode === 'CASHIER') {
-      window.location.href = '/cashier';
+      router.push('/cashier');
     } else {
-      window.location.href = '/dashboard';
+      router.push('/dashboard');
     }
   };
 
