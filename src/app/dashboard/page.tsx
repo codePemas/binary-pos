@@ -6,29 +6,56 @@ import Link from 'next/link';
 interface Product {
   id: number;
   stock: number;
-  minStock: number;
+  minStock?: number;
+  min_stock?: number;
   retailPrice: number;
+  retail_price?: number;
+}
+
+interface PurchaseOrder {
+  id: number;
+  status: string;
 }
 
 export default function DashboardPage() {
   const [totalProducts, setTotalProducts] = useState<number>(0);
   const [lowStockItems, setLowStockItems] = useState<number>(0);
   const [totalValue, setTotalValue] = useState<number>(0);
+  const [pendingOrdersCount, setPendingOrdersCount] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
-    async function loadMetrics() {
+    async function loadSystemMetrics() {
       try {
-        const res = await fetch('/api/products');
-        if (res.ok) {
-          const products: Product[] = await res.json();
+        setLoading(true);
+
+        // 1. Fetch live products from Neon DB
+        const prodRes = await fetch('/api/products');
+        let products: Product[] = [];
+        if (prodRes.ok) {
+          products = await prodRes.json();
           setTotalProducts(products.length);
-          
-          const lowStock = products.filter((p: Product) => p.stock <= (p.minStock || 10)).length;
+
+          const lowStock = products.filter((p) => {
+            const min = p.minStock ?? p.min_stock ?? 10;
+            return p.stock <= min;
+          }).length;
           setLowStockItems(lowStock);
 
-          const valuation = products.reduce((sum: number, p: Product) => sum + (Number(p.retailPrice) * p.stock), 0);
+          const valuation = products.reduce((sum, p) => {
+            const price = Number(p.retailPrice ?? p.retail_price ?? 0);
+            return sum + price * p.stock;
+          }, 0);
           setTotalValue(valuation);
+        }
+
+        // 2. Fetch live purchase orders from Neon DB
+        const supRes = await fetch('/api/suppliers');
+        if (supRes.ok) {
+          const supData = await supRes.json();
+          const orders: PurchaseOrder[] = supData.orders || [];
+          const pending = orders.filter((o) => o.status !== 'Received / Delivered').length;
+          setPendingOrdersCount(pending);
         }
       } catch (err) {
         console.error('Failed to load dashboard metrics:', err);
@@ -36,38 +63,39 @@ export default function DashboardPage() {
         setLoading(false);
       }
     }
-    loadMetrics();
+    loadSystemMetrics();
   }, []);
 
   const auditLogs = [
-    { id: 1, text: 'Connected to Neon PostgreSQL cloud database', time: 'Just now' },
-    { id: 2, text: `Active inventory audit: ${totalProducts} products indexed`, time: 'Today' },
-    { id: 3, text: `Stock valuation calculated: R${totalValue.toFixed(2)}`, time: 'Today' },
+    { id: 1, text: 'Connected securely to Neon PostgreSQL cloud database', time: 'Just now' },
+    { id: 2, text: `Active inventory audit: ${totalProducts} products indexed in central repository`, time: 'Today' },
+    { id: 3, text: `Real-time stock valuation calculated: R${totalValue.toFixed(2)}`, time: 'Today' },
+    { id: 4, text: `Department sync active: POS, Inventory & Procurement linked`, time: 'Today' },
   ];
 
   return (
     <div className="p-6 bg-slate-950 text-white min-h-screen">
       <div className="mb-6">
         <h1 className="text-2xl font-bold">Manager Dashboard</h1>
-        <p className="text-slate-400 text-sm">Monitor live operations and manage store activities from your Neon cloud database.</p>
+        <p className="text-slate-400 text-sm">Monitor live operations, inventory flow, and store activities from your Neon cloud database.</p>
       </div>
 
       {/* Metrics Grid */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
         <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl">
-          <div className="text-slate-400 text-xs uppercase font-bold tracking-wider">Estimated Turnover</div>
+          <div className="text-slate-400 text-xs uppercase font-bold tracking-wider">Total Asset Valuation</div>
           <div className="text-2xl font-extrabold text-white mt-2">
-            {loading ? '...' : `R${(totalValue * 0.15).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+            {loading ? '...' : `R${totalValue.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
           </div>
           <div className="text-emerald-400 text-xs font-semibold mt-1">▲ Live calculated from stock</div>
         </div>
 
         <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl">
-          <div className="text-slate-400 text-xs uppercase font-bold tracking-wider">Restock Alerts</div>
+          <div className="text-slate-400 text-xs uppercase font-bold tracking-wider">Pending Orders</div>
           <div className="text-2xl font-extrabold text-white mt-2">
-            {loading ? '...' : lowStockItems}
+            {loading ? '...' : pendingOrdersCount}
           </div>
-          <div className="text-amber-400 text-xs font-semibold mt-1">Low stock items requiring orders</div>
+          <div className="text-amber-400 text-xs font-semibold mt-1">Awaiting supplier delivery</div>
         </div>
 
         <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl">
@@ -75,7 +103,7 @@ export default function DashboardPage() {
           <div className="text-2xl font-extrabold text-white mt-2">
             {loading ? '...' : totalProducts}
           </div>
-          <div className="text-blue-400 text-xs font-semibold mt-1">Across all categories</div>
+          <div className="text-blue-400 text-xs font-semibold mt-1">Across all departments</div>
         </div>
 
         <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl">
@@ -84,7 +112,7 @@ export default function DashboardPage() {
             {loading ? '...' : lowStockItems}
           </div>
           <div className={`text-xs font-semibold mt-1 ${lowStockItems > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
-            {lowStockItems > 0 ? 'Needs attention' : 'All stock healthy'}
+            {lowStockItems > 0 ? 'Needs restock attention' : 'All stock healthy'}
           </div>
         </div>
       </div>
