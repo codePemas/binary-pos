@@ -37,12 +37,11 @@ export default function InventoryPage() {
     fetchInventory();
   }, []);
 
-  // Action to auto-raise a purchase order for low stock items
   const handleRaisePO = async (product: Product) => {
-    const defaultSupplier = 'Clover SA'; // Can be customized or mapped
+    const defaultSupplier = 'Clover SA';
     const poReference = `PO-${Math.floor(1000 + Math.random() * 9000)}`;
-    const suggestedQty = 50; // Reorder quantity
-    const estimatedCost = Number(product.retailPrice) * 0.6 * suggestedQty; // Estimated wholesale cost
+    const suggestedQty = 50;
+    const estimatedCost = Number(product.retailPrice) * 0.6 * suggestedQty;
 
     try {
       const res = await fetch('/api/suppliers', {
@@ -59,7 +58,7 @@ export default function InventoryPage() {
       });
 
       if (res.ok) {
-        alert(`✅ Purchase Order ${poReference} successfully raised for ${product.name} (${suggestedQty} units)! Check the Suppliers tab to review.`);
+        alert(`✅ Purchase Order ${poReference} successfully raised for ${product.name} (${suggestedQty} units)!`);
       } else {
         alert('Failed to raise purchase order.');
       }
@@ -129,7 +128,7 @@ export default function InventoryPage() {
                           {p.category}
                         </span>
                       </td>
-                      <td className="py-3 text-slate-300">R{Number(p.retailPrice ?? p.retail_price ?? 0).toFixed(2)}</td>
+                      <td className="py-3 text-slate-300">R{Number(p.retailPrice || 0).toFixed(2)}</td>
                       <td className="py-3 font-bold text-white">{p.stock} units</td>
                       <td className="py-3">
                         {isOutOfStock ? (
