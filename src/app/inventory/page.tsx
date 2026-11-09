@@ -115,12 +115,12 @@ export default function InventoryPage() {
               </thead>
               <tbody className="divide-y divide-slate-800/60">
                 {filteredProducts.map((p) => {
-                  const minThreshold = p.minStock ?? p.min_stock ?? 10;
-                  const isLowStock = p.stock <= minThreshold;
+                  // Enforce strict threshold: 15 units or less is low stock, 0 is out of stock
                   const isOutOfStock = p.stock === 0;
+                  const isLowStock = p.stock <= 15;
 
                   return (
-                    <tr key={p.id} className="hover:bg-slate-800/30 transition">
+                    <tr key={p.id} className={`hover:bg-slate-800/30 transition ${isLowStock ? 'bg-amber-950/10' : ''}`}>
                       <td className="py-3 text-xs text-slate-400 font-mono">{p.sku}</td>
                       <td className="py-3 font-semibold text-white">{p.name}</td>
                       <td className="py-3 text-slate-300">
@@ -146,10 +146,10 @@ export default function InventoryPage() {
                         )}
                       </td>
                       <td className="py-3 text-right">
-                        {(isLowStock || isOutOfStock) ? (
+                        {isLowStock ? (
                           <button
                             onClick={() => handleRaisePO(p)}
-                            className="bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition shadow-lg flex items-center gap-1.5 ml-auto"
+                            className="bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition shadow-lg flex items-center gap-1.5 ml-auto animate-bounce"
                           >
                             📦 Raise PO
                           </button>
