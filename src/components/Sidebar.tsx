@@ -8,6 +8,16 @@ export default function Sidebar() {
   const pathname = usePathname();
   const isCashierMode = pathname.startsWith('/cashier');
 
+  const handleSwitchToCashier = () => {
+    const pin = prompt('🔒 Cashier Authentication Required\nEnter Cashier PIN (1234):');
+    if (pin === '1234') {
+      alert('✔ Cashier Access Granted');
+      window.location.href = '/cashier';
+    } else if (pin !== null) {
+      alert('❌ Access Denied: Incorrect Cashier PIN!');
+    }
+  };
+
   const handleSwitchToManager = () => {
     const pin = prompt('🔒 Manager Authentication Required\nEnter Manager PIN (9999):');
     if (pin === '9999') {
@@ -16,10 +26,6 @@ export default function Sidebar() {
     } else if (pin !== null) {
       alert('❌ Access Denied: Incorrect Manager PIN!');
     }
-  };
-
-  const handleSwitchToCashier = () => {
-    window.location.href = '/cashier';
   };
 
   return (
