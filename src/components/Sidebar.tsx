@@ -19,13 +19,13 @@ export default function Sidebar() {
     const MANAGER_PIN = '9999';
 
     if (targetMode === 'CASHIER' && enteredPin !== CASHIER_PIN) {
-      alert('❌ Access Denied: Invalid Cashier PIN! (PIN is 1234)');
+      alert('❌ Access Denied: Invalid Cashier PIN! ');
       setEnteredPin('');
       return;
     }
 
     if (targetMode === 'MANAGER' && enteredPin !== MANAGER_PIN) {
-      alert('❌ Access Denied: Invalid Manager PIN! (PIN is 9999)');
+      alert('❌ Access Denied: Invalid Manager PIN!');
       setEnteredPin('');
       return;
     }
