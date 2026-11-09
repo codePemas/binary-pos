@@ -41,7 +41,7 @@ export default function CashierPage() {
   // Shift & Reconciliation State
   const [isShiftModalOpen, setIsShiftModalOpen] = useState(false);
   const [startingFloat, setStartingFloat] = useState('500.00');
-  const [expectedCashSales, setExpectedCashSales] = useState(1450.00); // Tracked live or simulated shift total
+  const [expectedCashSales, setExpectedCashSales] = useState(1450.00);
   const [expectedCardSales, setExpectedCardSales] = useState(890.00);
   const [actualCashCounted, setActualCashCounted] = useState('');
   const [shiftClosedReport, setShiftClosedReport] = useState<any | null>(null);
@@ -143,30 +143,49 @@ export default function CashierPage() {
       }
     }
 
-    const receiptData = {
-      receiptNo: `REC-${Math.floor(100000 + Math.random() * 900000)}`,
-      date: new Date().toLocaleString(),
-      cashier: 'S. Ndlovu (CASHIER)',
-      customer: selectedCustomer ? `${selectedCustomer.name} (${selectedCustomer.phone})` : 'Walk-in Customer',
-      items: [...cart],
-      subtotal,
-      vat,
-      total,
-      paymentMethod,
-      tendered: paymentMethod === 'CASH' ? cashNum : total,
-      change: paymentMethod === 'CASH' ? change : 0,
-      pointsEarned: selectedCustomer ? earnedPoints : 0,
-      newPointsBalance: selectedCustomer
-        ? paymentMethod === 'POINTS'
-          ? selectedCustomer.points - Math.ceil(total)
-          : selectedCustomer.points + earnedPoints
-        : 0,
-    };
+    try {
+      const res = await fetch('/api/pos/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: cart,
+          paymentMethod,
+          total,
+        }),
+      });
 
-    setActiveReceipt(receiptData);
-    setCart([]);
-    setCashTendered('');
-    await fetchProducts();
+      if (!res.ok) {
+        throw new Error('Failed to process checkout on server');
+      }
+
+      const receiptData = {
+        receiptNo: `REC-${Math.floor(100000 + Math.random() * 900000)}`,
+        date: new Date().toLocaleString(),
+        cashier: 'S. Ndlovu (CASHIER)',
+        customer: selectedCustomer ? `${selectedCustomer.name} (${selectedCustomer.phone})` : 'Walk-in Customer',
+        items: [...cart],
+        subtotal,
+        vat,
+        total,
+        paymentMethod,
+        tendered: paymentMethod === 'CASH' ? cashNum : total,
+        change: paymentMethod === 'CASH' ? change : 0,
+        pointsEarned: selectedCustomer ? earnedPoints : 0,
+        newPointsBalance: selectedCustomer
+          ? paymentMethod === 'POINTS'
+            ? selectedCustomer.points - Math.ceil(total)
+            : selectedCustomer.points + earnedPoints
+          : 0,
+      };
+
+      setActiveReceipt(receiptData);
+      setCart([]);
+      setCashTendered('');
+      await fetchProducts();
+    } catch (err) {
+      console.error('Checkout error:', err);
+      alert('Error processing transaction. Please try again.');
+    }
   };
 
   const handleReconcileShift = (e: React.FormEvent) => {
