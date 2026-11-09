@@ -41,7 +41,7 @@ export default function InventoryPage() {
     const defaultSupplier = 'Clover SA';
     const poReference = `PO-${Math.floor(1000 + Math.random() * 9000)}`;
     const suggestedQty = 50;
-    const estimatedCost = Number(product.retailPrice) * 0.6 * suggestedQty;
+    const estimatedCost = Number(product.retailPrice || 0) * 0.6 * suggestedQty;
 
     try {
       const res = await fetch('/api/suppliers', {
